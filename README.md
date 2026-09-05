@@ -17,3 +17,14 @@ python3 test_parse.py                                 # self-check
 ```
 
 Python 3.13 from Homebrew (`/opt/homebrew/bin/python3.13`): the system Python's sqlite lacks extension loading, which gold needs for sqlite-vec.
+
+## Embedding model
+
+`jinaai/jina-embeddings-v2-base-de` via fastembed: German+English, 8192 tokens, 768 dim, ~310 MB. One vector per email, no chunking.
+
+```sh
+/opt/homebrew/bin/python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -c 'from fastembed import TextEmbedding; TextEmbedding("jinaai/jina-embeddings-v2-base-de", cache_dir="models")'   # downloads into models/
+```
+
+`onnxruntime` is pinned to 1.22.1: 1.29 returns NaN and 1.23+ fails to load this model on arm64. Throughput ~6 emails/s on CPU.
