@@ -1,0 +1,13 @@
+# docker compose up -d                         -> http://localhost:8000
+# docker compose run --rm app python parse.py  -> bronze -> silver
+# docker compose run --rm app python gold.py build [--rebuild]
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    # ponytail: the whole folder is the state. Code, models/, gold.db, bronze/, silver/ all come from here,
+    # so "copy the folder" is the deployment and the image only carries Python + dependencies.
+    volumes: [".:/app"]
+    environment:
+      OWN_ADDRESSES: "me@example.com"
+    restart: unless-stopped

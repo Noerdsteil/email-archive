@@ -3,10 +3,12 @@
 import json
 from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import gold
 
 app = FastAPI(title='email-archive')
 app.add_event_handler('startup', gold.model)   # load the embedding model once, not on first query
+app.mount('/static', StaticFiles(directory='static'), name='static')
 
 
 @app.get('/')

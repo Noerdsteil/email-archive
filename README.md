@@ -49,3 +49,17 @@ The model name is stored in `meta`; a mismatch with `gold.py` refuses to start.
 `app.py` = FastAPI over `gold.search()`: `GET /api/search?q=&from=&since=&until=&human=&n=` (empty q → newest first) and `GET /api/email?id=` (full mail + thread).
 `static/index.html` = one file, Vue 3 + Tailwind v4 from CDN, no build step. Tokens (oklch palette, Inter / Space Grotesk / JetBrains Mono) copied from joschwe-site; dark mode follows the OS.
 Search fires 120 ms after the last keystroke, stale responses are dropped, ↑↓ moves the selection.
+
+## Docker
+
+```sh
+docker compose up -d                                  # http://localhost:8000
+docker compose run --rm app python parse.py           # bronze -> silver
+docker compose run --rm app python gold.py build      # silver -> gold.db (add --rebuild after parser changes)
+docker compose restart                                # after a --rebuild, so the server reopens gold.db
+```
+
+Image = python:3.13-slim + requirements (~430 MB). The project folder is bind-mounted to `/app`, so code, `models/`,
+`gold.db`, `bronze/` and `silver/` all come from the folder: copying the folder is the deployment.
+Vue and Tailwind are vendored in `static/vendor/`; only the Google Fonts still load from the network and fall back to system fonts offline.
+Verified 2026-09-05 on linux/arm64: onnxruntime 1.22.1 loads the model and returns real vectors.

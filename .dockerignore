@@ -1,0 +1,8 @@
+bronze
+silver
+models
+gold.db
+.venv
+.git
+__pycache__
+.DS_Store
