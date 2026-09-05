@@ -1,0 +1,6 @@
+bronze/
+silver/
+models/
+*.db
+__pycache__/
+.venv/
