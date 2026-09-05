@@ -68,7 +68,7 @@ def record(msg, folder):
         'list_id': msg.get('List-Id'),
         'is_machine': bool(msg.get('List-Id') or msg.get('Auto-Submitted')
                            or msg.get('Precedence') in ('bulk', 'list')
-                           or re.search(r'no-?reply|notification|mailer', frm[0]['addr'] if frm else '')),
+                           or re.search(r'no[-_]?reply|keine.antwort|invoic|notification|mailer|rechnung|service@|kundenservice|newsletter|news@|webmaster@|marketing@|versand', frm[0]['addr'] if frm else '')),
     }
 
 

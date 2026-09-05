@@ -28,3 +28,14 @@ Python 3.13 from Homebrew (`/opt/homebrew/bin/python3.13`): the system Python's 
 ```
 
 `onnxruntime` is pinned to 1.22.1: 1.29 returns NaN and 1.23+ fails to load this model on arm64. Throughput ~6 emails/s on CPU.
+
+## Gold
+
+```sh
+.venv/bin/python gold.py build [--limit 200] [--rebuild]   # silver -> gold.db, upserts only new ids, embeds
+.venv/bin/python gold.py search "Rechnung" --human --from 1und1 --since 2021-01-01 -n 10
+```
+
+`gold.db` = one SQLite file: `emails` (metadata columns), `fts` (FTS5, external content), `vec` (sqlite-vec, 768 float).
+Search = BM25 top-k + vector top-k, merged with reciprocal rank fusion, filters applied as SQL. ~10 ms per query after model load.
+The model name is stored in `meta`; a mismatch with `gold.py` refuses to start.
