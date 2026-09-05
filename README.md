@@ -3,7 +3,7 @@
 Local, searchable archive of ~12k emails. Concept and decisions: `JonasWiki/EMAIL RAG Archive/`.
 
 ```
-bronze/   Apple Mail mbox exports (Name.mbox/mbox). Sent folders prefixed `_Sent `.  gitignored
+bronze/   Apple Mail mbox exports (Name.mbox/mbox). Sent folders suffixed `_Sent`, e.g. `Family_Sent.mbox`.  gitignored
 silver/   emails.jsonl, one cleaned record per mail.                                 gitignored
 models/   pinned embedding model (fastembed, offline).                                gitignored
 gold      SQLite file: FTS5 + sqlite-vec + metadata columns.                          later

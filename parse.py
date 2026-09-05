@@ -55,7 +55,7 @@ def record(msg, folder):
     try: date = parsedate_to_datetime(msg['Date']).isoformat()
     except Exception: date = None
     frm = addrs(msg, 'From')
-    by_folder = 'sent' if folder.startswith('_Sent') else 'received'
+    by_folder = 'sent' if folder.endswith('_Sent') else 'received'
     by_addr = 'sent' if frm and frm[0]['addr'] in OWN else ('received' if OWN else None)
     return {
         'id': mid.strip(), 'date': date, 'folder': folder,
