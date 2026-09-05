@@ -39,3 +39,13 @@ Python 3.13 from Homebrew (`/opt/homebrew/bin/python3.13`): the system Python's 
 `gold.db` = one SQLite file: `emails` (metadata columns), `fts` (FTS5, external content), `vec` (sqlite-vec, 768 float).
 Search = BM25 top-k + vector top-k, merged with reciprocal rank fusion, filters applied as SQL. ~10 ms per query after model load.
 The model name is stored in `meta`; a mismatch with `gold.py` refuses to start.
+
+## Web UI + API
+
+```sh
+.venv/bin/uvicorn app:app --reload --port 8000     # http://localhost:8000
+```
+
+`app.py` = FastAPI over `gold.search()`: `GET /api/search?q=&from=&since=&until=&human=&n=` (empty q → newest first) and `GET /api/email?id=` (full mail + thread).
+`static/index.html` = one file, Vue 3 + Tailwind v4 from CDN, no build step. Tokens (oklch palette, Inter / Space Grotesk / JetBrains Mono) copied from joschwe-site; dark mode follows the OS.
+Search fires 120 ms after the last keystroke, stale responses are dropped, ↑↓ moves the selection.

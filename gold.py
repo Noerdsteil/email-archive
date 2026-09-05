@@ -37,7 +37,7 @@ def connect():
     stored = c.execute("select value from meta where key='model'").fetchone()
     if stored and stored[0] != MODEL:
         sys.exit(f'gold.db was built with {stored[0]}, code says {MODEL}. Run build --rebuild.')
-    c.execute("insert or ignore into meta values('model', ?)", (MODEL,))
+    if not stored: c.execute("insert into meta values('model', ?)", (MODEL,)); c.commit()
     return c
 
 

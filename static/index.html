@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+<style type="text/tailwindcss">
+  /* tokens copied from joschwe-site/src/styles/global.css; dark follows the OS */
+  :root { --c-bg: oklch(98.5% 0.004 95); --c-surface: oklch(96% 0.006 95); --c-ink: oklch(22% 0.02 275); --c-muted: oklch(45% 0.02 275); --c-line: oklch(89% 0.008 95); --c-accent: oklch(54% 0.23 285); --c-accent-soft: oklch(94% 0.05 285); }
+  @media (prefers-color-scheme: dark) { :root { --c-bg: oklch(18% 0.018 275); --c-surface: oklch(22% 0.02 275); --c-ink: oklch(94% 0.01 95); --c-muted: oklch(68% 0.015 275); --c-line: oklch(30% 0.02 275); --c-accent: oklch(72% 0.17 290); --c-accent-soft: oklch(28% 0.06 290); } }
+  @theme inline {
+    --color-bg: var(--c-bg); --color-surface: var(--c-surface); --color-ink: var(--c-ink); --color-muted: var(--c-muted);
+    --color-line: var(--c-line); --color-accent: var(--c-accent); --color-accent-soft: var(--c-accent-soft);
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif; --font-display: "Space Grotesk", "Inter", sans-serif; --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  body { @apply bg-bg text-ink font-sans antialiased; }
+  ::selection { background: var(--c-accent); color: var(--c-bg); }
+  input, select { @apply bg-surface border border-line rounded-md px-3 py-1.5 text-sm outline-none focus:border-accent; }
+</style>
+</head>
+<body class="h-screen overflow-hidden">
+<div id="app" class="h-full flex flex-col">
+  <header class="border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
+    <h1 class="font-display font-semibold text-lg tracking-tight mr-2">Email Archive</h1>
+    <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
+           placeholder="Suche … (↑↓ navigieren)" class="flex-1 min-w-64 !py-2" autofocus>
+    <input v-model="from" @input="onType" placeholder="von" class="w-36">
+    <input v-model="since" @input="onType" type="date" class="w-36">
+    <input v-model="until" @input="onType" type="date" class="w-36">
+    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
+    <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
+  </header>
+
+  <main class="flex-1 grid grid-cols-[minmax(320px,2fr)_3fr] min-h-0">
+    <ul class="overflow-y-auto border-r border-line divide-y divide-line">
+      <li v-for="(r, i) in results" :key="r.id" @click="open(r, i)"
+          class="px-4 py-2.5 cursor-pointer hover:bg-surface" :class="{'bg-accent-soft': i === sel}">
+        <div class="flex justify-between gap-2 text-xs text-muted">
+          <span class="truncate">{{ r.from_name || r.from_addr }}</span>
+          <span class="font-mono tabular-nums shrink-0">{{ (r.date||'').slice(0,10) }}</span>
+        </div>
+        <div class="text-sm font-medium truncate" :class="{'text-muted': r.is_machine}">{{ r.subject || '(kein Betreff)' }}</div>
+        <div class="text-xs text-muted truncate">{{ r.snippet }}</div>
+        <div v-if="r.matched.length" class="mt-0.5 flex gap-1">
+          <span v-for="m in r.matched" class="text-[10px] font-mono px-1 rounded bg-surface text-muted">{{ m }}</span>
+        </div>
+      </li>
+      <li v-if="!results.length && !loading" class="px-4 py-8 text-sm text-muted text-center">Keine Treffer</li>
+    </ul>
+
+    <article class="overflow-y-auto px-8 py-6" v-if="mail">
+      <h2 class="font-display font-semibold text-xl leading-snug">{{ mail.subject || '(kein Betreff)' }}</h2>
+      <dl class="mt-3 text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-muted">
+        <dt>Von</dt><dd class="text-ink">{{ mail.from_name }} <span class="font-mono text-xs">&lt;{{ mail.from_addr }}&gt;</span></dd>
+        <dt>An</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
+        <dt>Datum</dt><dd class="font-mono text-xs">{{ mail.date }}</dd>
+        <dt>Ordner</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }}<span v-if="mail.is_machine"> · automatisch</span></dd>
+        <template v-if="mail.attachments.length"><dt>Anhänge</dt><dd class="text-xs">{{ mail.attachments.join(', ') }}</dd></template>
+      </dl>
+      <nav v-if="mail.thread.length > 1" class="mt-4 border border-line rounded-md divide-y divide-line text-sm">
+        <div class="px-3 py-1.5 text-xs text-muted font-mono">Thread · {{ mail.thread.length }}</div>
+        <a v-for="t in mail.thread" @click="load(t.id)" class="block px-3 py-1.5 cursor-pointer hover:bg-surface"
+           :class="{'bg-accent-soft': t.id === mail.id}">
+          <span class="font-mono text-xs text-muted mr-2">{{ (t.date||'').slice(0,10) }}</span>{{ t.from_name || t.from_addr }} — {{ t.subject }}
+        </a>
+      </nav>
+      <pre class="mt-6 whitespace-pre-wrap font-sans text-[15px] leading-relaxed">{{ mail.body_raw.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() }}</pre>
+    </article>
+    <div v-else class="flex items-center justify-center text-muted text-sm">Wähle eine E-Mail</div>
+  </main>
+</div>
+<script>
+const { createApp } = Vue;
+createApp({
+  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, results: [], sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
+  mounted() { this.search(); const id = new URLSearchParams(location.search).get('id'); if (id) this.load(id); },
+  methods: {
+    onType() { clearTimeout(this.timer); this.timer = setTimeout(this.search, 120); },   // ponytail: debounce = instant enough
+    async search() {
+      const id = ++this.seq, t = performance.now(); this.loading = true;
+      const p = new URLSearchParams({ q: this.q, from: this.from, since: this.since, until: this.until, human: this.human });
+      const r = await (await fetch('/api/search?' + p)).json();
+      if (id !== this.seq) return;                                                        // a newer keystroke won
+      this.results = r; this.ms = Math.round(performance.now() - t); this.loading = false; this.sel = -1;
+    },
+    open(r, i) { this.sel = i; this.load(r.id); },
+    async load(id) { this.mail = await (await fetch('/api/email?id=' + encodeURIComponent(id))).json(); },
+    move(d) { const i = Math.min(this.results.length - 1, Math.max(0, this.sel + d)); if (this.results[i]) this.open(this.results[i], i); },
+  },
+}).mount('#app');
+</script>
+</body>
+</html>

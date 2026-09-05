@@ -17,21 +17,29 @@ OWN = {a.strip().lower() for a in os.environ.get('OWN_ADDRESSES', '').split(',')
 
 
 class _Text(HTMLParser):
-    def __init__(self): super().__init__(); self.out = []
-    def handle_data(self, d): self.out.append(d)
+    SKIP = {'style', 'script', 'head', 'title'}
+    def __init__(self): super().__init__(); self.out = []; self.skip = 0
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP: self.skip += 1
+        elif tag in ('br', 'p', 'div', 'tr', 'li', 'h1', 'h2', 'h3'): self.out.append('\n')
+    def handle_endtag(self, tag):
+        if tag in self.SKIP: self.skip = max(0, self.skip - 1)
+    def handle_data(self, d):
+        if not self.skip: self.out.append(d)
 
 
 def html_to_text(h):
     p = _Text(); p.feed(h)
-    return re.sub(r'\n{3,}', '\n\n', ''.join(p.out))
+    return re.sub(r'\n{3,}', '\n\n', re.sub(r'[ \t]+\n', '\n', ''.join(p.out))).strip()
 
 
 def body_of(msg):
-    part = msg.get_body(preferencelist=('plain',))
-    if part: return part.get_content(), 'plain'
-    part = msg.get_body(preferencelist=('html',))
-    if part: return html_to_text(part.get_content()), 'html'
-    return '', 'none'
+    plain, html = msg.get_body(preferencelist=('plain',)), msg.get_body(preferencelist=('html',))
+    text = plain.get_content().strip() if plain else ''
+    if text and not (html and len(text) < 200):        # ponytail: a <200-char plain part next to html is a "view in browser" stub
+        return text, 'plain'
+    if html: return html_to_text(html.get_content()), 'html'
+    return text, 'plain' if text else 'none'
 
 
 # ponytail: regex quote stripping; swap for email-reply-parser when it misfires
@@ -54,14 +62,14 @@ def record(msg, folder):
         (msg.get('Date', '') + msg.get('Subject', '') + raw[:500]).encode()).hexdigest()
     try: date = parsedate_to_datetime(msg['Date']).isoformat()
     except Exception: date = None
-    frm = addrs(msg, 'From')
+    frm = addrs(msg, 'From'); subj = msg.get('Subject', '').replace('\ufeff', '').strip()
     by_folder = 'sent' if folder.endswith('_Sent') else 'received'
     by_addr = 'sent' if frm and frm[0]['addr'] in OWN else ('received' if OWN else None)
     return {
         'id': mid.strip(), 'date': date, 'folder': folder,
         'direction': by_folder, 'direction_mismatch': bool(by_addr and by_addr != by_folder),
         'from': frm, 'to': addrs(msg, 'To'), 'cc': addrs(msg, 'Cc'),
-        'subject': msg.get('Subject', ''), 'subject_norm': SUBJ_PREFIX.sub('', msg.get('Subject', '')).strip(),
+        'subject': subj, 'subject_norm': SUBJ_PREFIX.sub('', subj).strip(),
         'refs': (msg.get('References', '') + ' ' + msg.get('In-Reply-To', '')).split(),
         'body_kind': kind, 'body_raw': raw, 'body': clean(raw),
         'attachments': [p.get_filename() for p in msg.iter_attachments() if p.get_filename()],
