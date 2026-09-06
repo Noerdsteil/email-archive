@@ -17,15 +17,16 @@ def index(): return FileResponse('static/index.html')
 
 @app.get('/api/search')
 def search(q: str = '', n: int = 30, from_: str | None = Query(None, alias='from'),
-           since: str | None = None, until: str | None = None, human: bool = False):
+           since: str | None = None, until: str | None = None, human: bool = False, attachments: bool = False):
     if q.strip():
-        return gold.search(q, n, from_, since, until, human)
+        return gold.search(q, n, from_, since, until, human, attachments)
     c = gold.connect(); where, args = ['1=1'], []              # empty query: newest first, same filters
     if from_: where.append('from_addr like ?'); args.append(f'%{from_}%')
     if since: where.append('date >= ?'); args.append(since)
     if until: where.append('date <= ?'); args.append(until)
     if human: where.append('is_machine = 0')
-    rows = c.execute(f"select id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine from emails where {' and '.join(where)} order by date desc limit ?", [*args, n])
+    if attachments: where.append('has_attachments = 1')
+    rows = c.execute(f"select id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine,has_attachments from emails where {' and '.join(where)} order by date desc limit ?", [*args, n])
     return [dict(r) | {'score': 0, 'matched': []} for r in rows]
 
 

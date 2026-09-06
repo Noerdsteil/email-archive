@@ -31,6 +31,7 @@
     <input v-model="since" @input="onType" type="date" class="w-36">
     <input v-model="until" @input="onType" type="date" class="w-36">
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
+    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">mit Anhang</label>
     <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
   </header>
 
@@ -40,7 +41,7 @@
           class="px-4 py-2.5 cursor-pointer hover:bg-surface" :class="{'bg-accent-soft': i === sel}">
         <div class="flex justify-between gap-2 text-xs text-muted">
           <span class="truncate">{{ r.from_name || r.from_addr }}</span>
-          <span class="font-mono tabular-nums shrink-0">{{ (r.date||'').slice(0,10) }}</span>
+          <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="Anhang">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
         </div>
         <div class="text-sm font-medium truncate" :class="{'text-muted': r.is_machine}">{{ r.subject || '(kein Betreff)' }}</div>
         <div class="text-xs text-muted truncate">{{ r.snippet }}</div>
@@ -75,13 +76,13 @@
 <script>
 const { createApp } = Vue;
 createApp({
-  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, results: [], sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
+  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, attachments: false, results: [], sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
   mounted() { this.search(); const id = new URLSearchParams(location.search).get('id'); if (id) this.load(id); },
   methods: {
     onType() { clearTimeout(this.timer); this.timer = setTimeout(this.search, 120); },   // ponytail: debounce = instant enough
     async search() {
       const id = ++this.seq, t = performance.now(); this.loading = true;
-      const p = new URLSearchParams({ q: this.q, from: this.from, since: this.since, until: this.until, human: this.human });
+      const p = new URLSearchParams({ q: this.q, from: this.from, since: this.since, until: this.until, human: this.human, attachments: this.attachments });
       const r = await (await fetch('/api/search?' + p)).json();
       if (id !== this.seq) return;                                                        // a newer keystroke won
       this.results = r; this.ms = Math.round(performance.now() - t); this.loading = false; this.sel = -1;
