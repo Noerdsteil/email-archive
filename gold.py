@@ -43,7 +43,7 @@ def connect():
 
 def embed_text(r):
     f = r['from'][0] if r['from'] else {'name': '', 'addr': ''}
-    return f"From: {f['name']} <{f['addr']}> | Date: {(r['date'] or '')[:10]} | Subject: {r['subject']}\n{r['body']}"
+    return f"From: {f['name']} <{f['addr']}> | Date: {(r['date'] or '')[:10]} | Subject: {r['subject']}\n{r['body'][:20000]}"   # ~8k tokens; tokenizer would truncate anyway
 
 
 def build(limit=None, rebuild=False):
@@ -56,15 +56,20 @@ def build(limit=None, rebuild=False):
     new = [r for r in recs if r['id'] not in have]
     print(f'{len(recs)} in silver, {len(have)} already in gold, {len(new)} to add')
     if not new: return
-    t = time.time(); vecs = list(model().embed([embed_text(r) for r in new], batch_size=16))
-    print(f'embedded in {time.time() - t:.0f}s')
-    for r, v in zip(new, vecs):
-        f = r['from'][0] if r['from'] else {'name': '', 'addr': ''}
-        cur = c.execute('insert into emails(id,thread_id,date,folder,direction,from_addr,from_name,to_addrs,subject,body,body_raw,is_machine,attachments,has_attachments) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                        (r['id'], r['thread_id'], r['date'], r['folder'], r['direction'], f['addr'], f['name'],
-                         ' '.join(t['addr'] for t in r['to']), r['subject'], r['body'], r['body_raw'], int(r['is_machine']), json.dumps(r['attachments']), int(bool(r['attachments']))))
-        c.execute('insert into fts(rowid,subject,body,from_name,from_addr) values(?,?,?,?,?)', (cur.lastrowid, r['subject'], r['body'], f['name'], f['addr']))
-        c.execute('insert into vec(rowid,embedding) values(?,?)', (cur.lastrowid, sqlite_vec.serialize_float32(v.tolist())))
+    t0 = time.time(); BATCH = 100                        # ponytail: commit per batch -> progress visible, Ctrl+C safe, plain `build` resumes
+    for i in range(0, len(new), BATCH):
+        chunk = new[i:i + BATCH]
+        vecs = list(model().embed([embed_text(r) for r in chunk], batch_size=16))
+        for r, v in zip(chunk, vecs):
+            f = r['from'][0] if r['from'] else {'name': '', 'addr': ''}
+            cur = c.execute('insert into emails(id,thread_id,date,folder,direction,from_addr,from_name,to_addrs,subject,body,body_raw,is_machine,attachments,has_attachments) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                            (r['id'], r['thread_id'], r['date'], r['folder'], r['direction'], f['addr'], f['name'],
+                             ' '.join(t['addr'] for t in r['to']), r['subject'], r['body'], r['body_raw'], int(r['is_machine']), json.dumps(r['attachments']), int(bool(r['attachments']))))
+            c.execute('insert into fts(rowid,subject,body,from_name,from_addr) values(?,?,?,?,?)', (cur.lastrowid, r['subject'], r['body'], f['name'], f['addr']))
+            c.execute('insert into vec(rowid,embedding) values(?,?)', (cur.lastrowid, sqlite_vec.serialize_float32(v.tolist())))
+        c.commit()
+        done, rate = i + len(chunk), (i + len(chunk)) / (time.time() - t0)
+        print(f'{done}/{len(new)}  {rate:.1f}/s  eta {(len(new) - done) / rate / 60:.0f} min', flush=True)
     c.commit(); print(f'gold.db now {c.execute("select count(*) from emails").fetchone()[0]} emails')
 
 
