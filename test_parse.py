@@ -13,7 +13,7 @@ def mail(mid, frm, to, subj, body, refs=None, html=False):
     return m
 
 with tempfile.TemporaryDirectory() as d:
-    d = Path(d); os.environ['OWN_ADDRESSES'] = 'me@x.de'; parse.OWN = {'me@x.de'}
+    d = Path(d); os.environ['OWN_ADDRESSES'] = '@x.de'; parse.OWN = {'@x.de'}
     inbox = d / 'bronze/Inbox.mbox'; sent = d / 'bronze/Inbox_Sent.mbox'
     inbox.mkdir(parents=True); sent.mkdir(parents=True)
     a = mailbox.mbox(inbox / 'mbox')

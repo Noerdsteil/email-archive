@@ -1,7 +1,7 @@
 """bronze/ (Apple Mail mbox exports or .eml files) -> silver/emails.jsonl
 
 Usage:  python3 parse.py            # reads bronze/, writes silver/emails.jsonl, prints metrics
-Env:    OWN_ADDRESSES="me@a.de,me@b.com"   used to derive direction as a cross-check
+Env:    OWN_ADDRESSES="me@a.de,@mydomain.de"   decides direction (sent/received); "@domain" matches all aliases
 """
 # ponytail: stdlib only. Lesson steps 0-5, 7, 8 in JonasWiki/EMAIL RAG Archive/Preprocessing.md
 import os, sys, json, mailbox, hashlib, re, statistics
@@ -14,6 +14,8 @@ from html.parser import HTMLParser
 
 BRONZE, SILVER = Path('bronze'), Path('silver/emails.jsonl')
 OWN = {a.strip().lower() for a in os.environ.get('OWN_ADDRESSES', '').split(',') if a.strip()}
+def is_own(addr):          # entries starting with '@' match a whole domain: "@example.com"
+    return addr in OWN or any(addr.endswith(o) for o in OWN if o.startswith('@'))
 
 
 class _Text(HTMLParser):
@@ -64,10 +66,11 @@ def record(msg, folder):
     except Exception: date = None
     frm = addrs(msg, 'From'); subj = msg.get('Subject', '').replace('\ufeff', '').strip()
     by_folder = 'sent' if folder.endswith('_Sent') else 'received'
-    by_addr = 'sent' if frm and frm[0]['addr'] in OWN else ('received' if OWN else None)
+    by_addr = 'sent' if frm and is_own(frm[0]['addr']) else ('received' if OWN else None)
     return {
         'id': mid.strip(), 'date': date, 'folder': folder,
-        'direction': by_folder, 'direction_mismatch': bool(by_addr and by_addr != by_folder),
+        # ponytail: the From address decides; the folder suffix is only the fallback when OWN_ADDRESSES is unset
+        'direction': by_addr or by_folder, 'direction_mismatch': bool(by_addr and by_addr != by_folder),
         'from': frm, 'to': addrs(msg, 'To'), 'cc': addrs(msg, 'Cc'),
         'subject': subj, 'subject_norm': SUBJ_PREFIX.sub('', subj).strip(),
         'refs': (msg.get('References', '') + ' ' + msg.get('In-Reply-To', '')).split(),
