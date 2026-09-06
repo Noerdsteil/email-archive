@@ -25,13 +25,14 @@
 <div id="app" class="h-full flex flex-col">
   <header class="border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
     <h1 class="font-display font-semibold text-lg tracking-tight mr-2">Email Archive</h1>
-    <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
+    <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.esc="reset"
            placeholder="Suche … (↑↓ navigieren)" class="flex-1 min-w-64 !py-2" autofocus>
     <input v-model="from" @input="onType" placeholder="von" class="w-36">
     <input v-model="since" @input="onType" type="date" class="w-36">
     <input v-model="until" @input="onType" type="date" class="w-36">
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">mit Anhang</label>
+    <button v-if="active" @click="reset" class="text-sm text-accent hover:underline">Zurücksetzen</button>
     <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
   </header>
 
@@ -77,8 +78,10 @@
 const { createApp } = Vue;
 createApp({
   data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, attachments: false, results: [], sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
+  computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; } },
   mounted() { this.search(); const id = new URLSearchParams(location.search).get('id'); if (id) this.load(id); },
   methods: {
+    reset() { Object.assign(this, { q: '', from: '', since: '', until: '', human: false, attachments: false }); this.search(); this.$refs.q.focus(); },
     onType() { clearTimeout(this.timer); this.timer = setTimeout(this.search, 120); },   // ponytail: debounce = instant enough
     async search() {
       const id = ++this.seq, t = performance.now(); this.loading = true;
