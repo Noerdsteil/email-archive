@@ -9,5 +9,5 @@ services:
     # so "copy the folder" is the deployment and the image only carries Python + dependencies.
     volumes: [".:/app"]
     environment:
-      OWN_ADDRESSES: "@example.com,me@example.org"
+      OWN_ADDRESSES: "@example.com"
     restart: unless-stopped
