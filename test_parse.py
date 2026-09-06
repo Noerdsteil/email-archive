@@ -37,4 +37,6 @@ with tempfile.TemporaryDirectory() as d:
     assert recs['<2@x>']['direction'] == 'sent' and not recs['<2@x>']['direction_mismatch']
     assert recs['<1@x>']['direction'] == 'received' and not recs['<1@x>']['direction_mismatch']
     assert (d / 'silver/emails.jsonl').read_text().count('\n') == 3
+    for r in recs.values():                                              # source round-trip: bronze -> same message
+        m = parse.load_message(r['source']); assert m['Message-ID'] == r['id'] and m['Subject'] == r['subject'], r['id']
 print('ok')

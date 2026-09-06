@@ -52,6 +52,11 @@ def build(limit=None, rebuild=False):
     recs = [json.loads(l) for l in open(SILVER)]
     recs.sort(key=lambda r: r['date'] or '', reverse=True)
     if limit: recs = recs[:limit]
+    # sources: where each mail lives in bronze (file, start, stop) -> attachments / show-original at request time.
+    # Cheap (no embedding), so refreshed for all records on every build.
+    c.execute('create table if not exists sources(id text primary key, file text, start integer, stop integer)')
+    c.executemany('insert or replace into sources values(?,?,?,?)', [(r['id'], *r['source']) for r in recs if r.get('source')])
+    c.commit()
     have = {row[0] for row in c.execute('select id from emails')}
     new = [r for r in recs if r['id'] not in have]
     print(f'{len(recs)} in silver, {len(have)} already in gold, {len(new)} to add')

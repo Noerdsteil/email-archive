@@ -58,7 +58,7 @@ def addrs(msg, h):
     return [{'name': n, 'addr': a.lower()} for n, a in getaddresses(msg.get_all(h, []))]
 
 
-def record(msg, folder):
+def record(msg, folder, source):
     raw, kind = body_of(msg)
     mid = msg.get('Message-ID') or 'sha1:' + hashlib.sha1(
         (msg.get('Date', '') + msg.get('Subject', '') + raw[:500]).encode()).hexdigest()
@@ -68,7 +68,7 @@ def record(msg, folder):
     by_folder = 'sent' if folder.endswith('_Sent') else 'received'
     by_addr = 'sent' if frm and is_own(frm[0]['addr']) else ('received' if OWN else None)
     return {
-        'id': mid.strip(), 'date': date, 'folder': folder,
+        'id': mid.strip(), 'date': date, 'folder': folder, 'source': source,
         # ponytail: the From address decides; the folder suffix is only the fallback when OWN_ADDRESSES is unset
         'direction': by_addr or by_folder, 'direction_mismatch': bool(by_addr and by_addr != by_folder),
         'from': frm, 'to': addrs(msg, 'To'), 'cc': addrs(msg, 'Cc'),
@@ -84,7 +84,7 @@ def record(msg, folder):
 
 
 def messages(root):
-    """Yields (msg, folder). Apple Mail: Name.mbox/mbox -> folder 'Name'. Also plain *.mbox files and *.eml."""
+    """Yields (msg, folder, source). source = [file, start, stop] locates the raw message in bronze for load_message()."""
     parse = BytesParser(policy=policy.default).parse
     for f in sorted(root.rglob('*')):
         if f.is_dir(): continue
@@ -93,9 +93,21 @@ def messages(root):
         elif f.suffix == '.mbox':
             folder, src = f.stem, f
         elif f.suffix == '.eml':
-            yield parse(f.open('rb')), f.parent.name; continue
+            yield parse(f.open('rb')), f.parent.name, [str(f), 0, f.stat().st_size]; continue
         else: continue
-        for m in mailbox.mbox(src, factory=parse): yield m, folder
+        mb = mailbox.mbox(src, factory=parse)
+        for key, m in mb.iteritems():
+            start, stop = mb._toc[key]                    # ponytail: private but unchanged since 2.5; start points at the "From " line
+            yield m, folder, [str(src), start, stop]
+
+
+def load_message(source):
+    """Re-read one raw message from bronze by [file, start, stop]. Used for attachments / show-original."""
+    file, start, stop = source
+    with open(file, 'rb') as fh:
+        fh.seek(start)
+        if fh.readline()[:5] != b'From ': fh.seek(start)   # .eml has no From_ separator
+        return BytesParser(policy=policy.default).parsebytes(fh.read(stop - fh.tell()))
 
 
 def thread_ids(recs):
@@ -127,8 +139,8 @@ def metrics(recs, bad, dupes):
 
 def main(root=BRONZE, out=SILVER):
     recs, seen, bad, dupes = [], set(), 0, 0
-    for msg, folder in messages(root):
-        try: r = record(msg, folder)
+    for msg, folder, source in messages(root):
+        try: r = record(msg, folder, source)
         except Exception as e: bad += 1; print('skip:', e, file=sys.stderr); continue
         if r['id'] in seen: dupes += 1; continue
         seen.add(r['id']); recs.append(r)

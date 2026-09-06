@@ -1,10 +1,11 @@
 """Search API + static UI.  Run: .venv/bin/uvicorn app:app --reload --port 8000  ->  http://localhost:8000"""
 # ponytail: thin HTTP layer over gold.search(); the MCP server calls the same endpoints.
 import json
-from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from urllib.parse import quote
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-import gold
+import gold, parse
 
 app = FastAPI(title='email-archive')
 app.add_event_handler('startup', gold.model)   # load the embedding model once, not on first query
@@ -38,3 +39,15 @@ def email(id: str):
     e = dict(e); e['attachments'] = json.loads(e['attachments'] or '[]')
     e['thread'] = [dict(r) for r in c.execute('select id,date,from_name,from_addr,subject from emails where thread_id=? order by date', (e['thread_id'],))]
     return e
+
+
+@app.get('/api/attachment')
+def attachment(id: str, name: str):
+    """Reads the one raw message from bronze by byte range and streams the named part. Nothing is stored."""
+    src = gold.connect().execute('select file,start,stop from sources where id=?', (id,)).fetchone()
+    if not src: raise HTTPException(404, 'no source for this mail (rerun parse + build)')
+    for part in parse.load_message(tuple(src)).iter_attachments():
+        if part.get_filename() == name:
+            return Response(part.get_payload(decode=True), media_type=part.get_content_type(),
+                            headers={'Content-Disposition': f"inline; filename*=UTF-8''{quote(name)}"})
+    raise HTTPException(404, 'attachment not found')

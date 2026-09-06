@@ -60,7 +60,9 @@
         <dt>An</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
         <dt>Datum</dt><dd class="font-mono text-xs">{{ mail.date }}</dd>
         <dt>Ordner</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }}<span v-if="mail.is_machine"> · automatisch</span></dd>
-        <template v-if="mail.attachments.length"><dt>Anhänge</dt><dd class="text-xs">{{ mail.attachments.join(', ') }}</dd></template>
+        <template v-if="mail.attachments.length"><dt>Anhänge</dt><dd class="text-xs flex flex-wrap gap-x-3">
+          <a v-for="a in mail.attachments" :href="'/api/attachment?id=' + encodeURIComponent(mail.id) + '&name=' + encodeURIComponent(a)" target="_blank" class="text-accent hover:underline">📎 {{ a }}</a>
+        </dd></template>
       </dl>
       <nav v-if="mail.thread.length > 1" class="mt-4 border border-line rounded-md divide-y divide-line text-sm">
         <div class="px-3 py-1.5 text-xs text-muted font-mono">Thread · {{ mail.thread.length }}</div>

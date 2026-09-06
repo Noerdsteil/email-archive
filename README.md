@@ -63,3 +63,8 @@ Image = python:3.13-slim + requirements (~430 MB). The project folder is bind-mo
 `gold.db`, `bronze/` and `silver/` all come from the folder: copying the folder is the deployment.
 Vue and Tailwind are vendored in `static/vendor/`; only the Google Fonts still load from the network and fall back to system fonts offline.
 Verified 2026-09-05 on linux/arm64: onnxruntime 1.22.1 loads the model and returns real vectors.
+
+## Attachments
+
+Silver records where each mail lives in bronze (`source: [file, start, stop]`); `gold.py build` copies that into a `sources` table (no embedding, refreshed every run).
+`GET /api/attachment?id=&name=` re-reads that one message from the mbox by byte range and streams the part. Nothing is extracted to disk, but `bronze/` must stay in place and unchanged; after a re-export, rerun parse + build.
