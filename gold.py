@@ -57,6 +57,9 @@ def build(limit=None, rebuild=False):
     # Cheap (no embedding), so refreshed for all records on every build.
     c.execute('create table if not exists sources(id text primary key, file text, start integer, stop integer)')
     c.executemany('insert or replace into sources values(?,?,?,?)', [(r['id'], *r['source']) for r in recs if r.get('source')])
+    # classes: sender_class (human|machine|unknown) lives apart from emails so the rule can evolve without re-embedding
+    c.execute('create table if not exists classes(id text primary key, sender_class text)')
+    c.executemany('insert or replace into classes values(?,?)', [(r['id'], r.get('sender_class', 'unknown')) for r in recs])
     c.commit()
     have = {row[0] for row in c.execute('select id from emails')}
     new = [r for r in recs if r['id'] not in have]
@@ -90,7 +93,7 @@ def search(q, n=10, from_=None, since=None, until=None, human=False, attachments
     if from_: where.append('emails.from_addr like ?'); args.append(f'%{from_}%')
     if since: where.append('emails.date >= ?'); args.append(since)
     if until: where.append('emails.date <= ?'); args.append(until)
-    if human: where.append('emails.is_machine = 0')
+    if human: where.append("emails.id in (select id from classes where sender_class='human')")
     if attachments: where.append('emails.has_attachments = 1')
     filt = (' and ' + ' and '.join(where)) if where else ''
 
@@ -105,7 +108,7 @@ def search(q, n=10, from_=None, since=None, until=None, human=False, attachments
     top = sorted(scores.items(), key=lambda kv: -kv[1]['score'])[:n]
     out = []
     for rowid, s in top:
-        e = dict(c.execute('select id,thread_id,date,folder,direction,from_addr,from_name,subject,body,is_machine,has_attachments from emails where rowid=?', (rowid,)).fetchone())
+        e = dict(c.execute("select e.id,thread_id,date,folder,direction,from_addr,from_name,subject,body,is_machine,has_attachments,coalesce(sender_class,'unknown') sender_class from emails e left join classes using(id) where rowid=?", (rowid,)).fetchone())
         e['snippet'] = e.pop('body')[:160].replace('\n', ' '); e.update(score=round(s['score'], 4), matched=s['src']); out.append(e)
     return out
 

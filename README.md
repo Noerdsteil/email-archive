@@ -50,8 +50,10 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
 | gold | search index: metadata columns + FTS5 + vectors | `gold.db` (SQLite) |
 
 - `parse.py` (stdlib only): decodes MIME, picks plain over HTML, strips quoted replies and signatures, dedupes on Message-ID,
-  threads via References, flags machine mail from headers, derives sent/received from your addresses, records where each
-  mail lives in bronze. Prints metrics at the end.
+  threads via References, derives sent/received from your addresses, records where each mail lives in bronze, and
+  classifies every sender as **human / machine / unknown**: everyone you ever wrote to (To/Cc of your sent mail, written
+  to `silver/contacts.json`) is human, header and address patterns (List-Id, noreply, info@, …) are machine, the rest is
+  unknown; threads inherit human. "nur Menschen" in the UI means human only; unknown rows carry a `?`. Prints metrics at the end.
 - `gold.py`: embeds every mail with `jinaai/jina-embeddings-v2-base-de` (German + English, 8192 tokens, one vector per mail)
   via fastembed/ONNX on CPU, stores FTS5 + sqlite-vec + columns in one file. `search()` fuses BM25 and vector ranks
   (reciprocal rank fusion) and applies filters as SQL. ~10 ms per query.
@@ -62,6 +64,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   With an empty query the list is the whole archive, newest first, loaded in pages of 30 as you scroll (keyset cursor `before=date|id`, no offsets).
 
 The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.
+`sources` and `classes` are side tables refreshed on every build without re-embedding, so classifier changes cost seconds, not an hour.
 
 ## Local development without Docker
 

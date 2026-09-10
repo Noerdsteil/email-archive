@@ -44,7 +44,7 @@
           <span class="truncate">{{ r.from_name || r.from_addr }}</span>
           <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="Anhang">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
         </div>
-        <div class="text-sm font-medium truncate" :class="{'text-muted': r.is_machine}">{{ r.subject || '(kein Betreff)' }}</div>
+        <div class="text-sm font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-muted font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
         <div class="text-xs text-muted truncate">{{ r.snippet }}</div>
         <div v-if="r.matched.length" class="mt-0.5 flex gap-1">
           <span v-for="m in r.matched" class="text-[10px] font-mono px-1 rounded bg-surface text-muted">{{ m }}</span>
@@ -60,7 +60,7 @@
         <dt>Von</dt><dd class="text-ink">{{ mail.from_name }} <span class="font-mono text-xs">&lt;{{ mail.from_addr }}&gt;</span></dd>
         <dt>An</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
         <dt>Datum</dt><dd class="font-mono text-xs">{{ mail.date }}</dd>
-        <dt>Ordner</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }}<span v-if="mail.is_machine"> · automatisch</span></dd>
+        <dt>Ordner</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }} · {{ {human: 'Kontakt', machine: 'automatisch', unknown: 'unbekannt'}[mail.sender_class] }}</dd>
         <template v-if="mail.attachments.length"><dt>Anhänge</dt><dd class="text-xs flex flex-wrap gap-x-3">
           <a v-for="a in mail.attachments" :href="'/api/attachment?id=' + encodeURIComponent(mail.id) + '&name=' + encodeURIComponent(a)" target="_blank" class="text-accent hover:underline">📎 {{ a }}</a>
         </dd></template>
