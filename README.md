@@ -62,6 +62,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
 - `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,
   ↑↓ move the selection, Esc resets. Query, all filters and the open mail live in the URL (`?q=&from=&since=&until=&human=1&attachments=1&id=`), so reload, bookmark and share keep the view. Dark mode follows the OS.
   With an empty query the list is the whole archive, newest first, loaded in pages of 30 as you scroll (keyset cursor `before=date|id`, no offsets).
+  Colors are [Everforest](https://github.com/sainnhe/everforest) as shipped by [Omarchy](https://omarchy.org) (dark medium; light follows the OS); all tokens sit in one `:root` block at the top of the file.
 
 The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.
 `sources` and `classes` are side tables refreshed on every build without re-embedding, so classifier changes cost seconds, not an hour.

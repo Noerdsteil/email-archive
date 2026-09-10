@@ -4,27 +4,27 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Archive</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cascadia+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="/static/vendor/tailwind-browser.js"></script>
 <script src="/static/vendor/vue.global.prod.js"></script>
 <style type="text/tailwindcss">
-  /* tokens copied from joschwe-site/src/styles/global.css; dark follows the OS */
-  :root { --c-bg: oklch(98.5% 0.004 95); --c-surface: oklch(96% 0.006 95); --c-ink: oklch(22% 0.02 275); --c-muted: oklch(45% 0.02 275); --c-line: oklch(89% 0.008 95); --c-accent: oklch(54% 0.23 285); --c-accent-soft: oklch(94% 0.05 285); }
-  @media (prefers-color-scheme: dark) { :root { --c-bg: oklch(18% 0.018 275); --c-surface: oklch(22% 0.02 275); --c-ink: oklch(94% 0.01 95); --c-muted: oklch(68% 0.015 275); --c-line: oklch(30% 0.02 275); --c-accent: oklch(72% 0.17 290); --c-accent-soft: oklch(28% 0.06 290); } }
+  /* Everforest, as shipped by Omarchy (themes/everforest/colors.toml = dark medium, accent = blue). Light = Everforest light medium. */
+  :root { --c-bg: #2d353b; --c-surface: #343f44; --c-ink: #d3c6aa; --c-muted: #859289; --c-line: #475258; --c-accent: #7fbbb3; --c-accent-soft: #3a515d; --c-green: #a7c080; --c-red: #e67e80; --c-yellow: #dbbc7f; --c-sel: #d3c6aa; }
+  @media (prefers-color-scheme: light) { :root { --c-bg: #fdf6e3; --c-surface: #f4f0d9; --c-ink: #5c6a72; --c-muted: #939f91; --c-line: #e6e2cc; --c-accent: #3a94c5; --c-accent-soft: #e9f0e9; --c-green: #8da101; --c-red: #f85552; --c-yellow: #dfa000; --c-sel: #e0dcc7; } }
   @theme inline {
     --color-bg: var(--c-bg); --color-surface: var(--c-surface); --color-ink: var(--c-ink); --color-muted: var(--c-muted);
-    --color-line: var(--c-line); --color-accent: var(--c-accent); --color-accent-soft: var(--c-accent-soft);
-    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif; --font-display: "Space Grotesk", "Inter", sans-serif; --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --color-line: var(--c-line); --color-accent: var(--c-accent); --color-accent-soft: var(--c-accent-soft); --color-green: var(--c-green); --color-red: var(--c-red); --color-yellow: var(--c-yellow);
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif; --font-display: "Cascadia Mono", ui-monospace, monospace; --font-mono: "Cascadia Mono", ui-monospace, monospace;
   }
   body { @apply bg-bg text-ink font-sans antialiased; }
-  ::selection { background: var(--c-accent); color: var(--c-bg); }
-  input, select { @apply bg-surface border border-line rounded-md px-3 py-1.5 text-sm outline-none focus:border-accent; }
+  ::selection { background: var(--c-sel); color: var(--c-bg); }
+  input, select { @apply bg-surface border border-line px-3 py-1.5 text-sm outline-none focus:border-accent; }
 </style>
 </head>
 <body class="h-screen overflow-hidden">
 <div id="app" class="h-full flex flex-col">
   <header class="border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
-    <h1 class="font-display font-semibold text-lg tracking-tight mr-2">Email Archive</h1>
+    <h1 class="font-display font-semibold text-lg tracking-tight mr-2"><span class="text-green">~</span>/email-archive</h1>
     <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.esc="reset"
            placeholder="Suche … (↑↓ navigieren)" class="flex-1 min-w-64 !py-2" autofocus>
     <input v-model="from" @input="onType" placeholder="von" class="w-36">
@@ -39,15 +39,15 @@
   <main class="flex-1 grid grid-cols-[minmax(320px,2fr)_3fr] min-h-0">
     <ul class="overflow-y-auto border-r border-line divide-y divide-line">
       <li v-for="(r, i) in results" :key="r.id" @click="open(r, i)"
-          class="px-4 py-2.5 cursor-pointer hover:bg-surface" :class="{'bg-accent-soft': i === sel}">
+          class="px-4 py-2.5 cursor-pointer hover:bg-surface border-l-2 border-transparent" :class="{'bg-accent-soft !border-accent': i === sel}">
         <div class="flex justify-between gap-2 text-xs text-muted">
           <span class="truncate">{{ r.from_name || r.from_addr }}</span>
           <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="Anhang">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
         </div>
-        <div class="text-sm font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-muted font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
+        <div class="text-sm font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-yellow font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
         <div class="text-xs text-muted truncate">{{ r.snippet }}</div>
         <div v-if="r.matched.length" class="mt-0.5 flex gap-1">
-          <span v-for="m in r.matched" class="text-[10px] font-mono px-1 rounded bg-surface text-muted">{{ m }}</span>
+          <span v-for="m in r.matched" class="text-[10px] font-mono px-1 bg-surface" :class="m === 'fts' ? 'text-green' : 'text-accent'">{{ m }}</span>
         </div>
       </li>
       <li v-if="!results.length && !loading" class="px-4 py-8 text-sm text-muted text-center">Keine Treffer</li>
@@ -55,7 +55,7 @@
     </ul>
 
     <article class="overflow-y-auto px-8 py-6" v-if="mail">
-      <h2 class="font-display font-semibold text-xl leading-snug">{{ mail.subject || '(kein Betreff)' }}</h2>
+      <h2 class="font-display font-semibold text-xl leading-snug border-l-2 border-accent pl-3">{{ mail.subject || '(kein Betreff)' }}</h2>
       <dl class="mt-3 text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-muted">
         <dt>Von</dt><dd class="text-ink">{{ mail.from_name }} <span class="font-mono text-xs">&lt;{{ mail.from_addr }}&gt;</span></dd>
         <dt>An</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
@@ -65,7 +65,7 @@
           <a v-for="a in mail.attachments" :href="'/api/attachment?id=' + encodeURIComponent(mail.id) + '&name=' + encodeURIComponent(a)" target="_blank" class="text-accent hover:underline">📎 {{ a }}</a>
         </dd></template>
       </dl>
-      <nav v-if="mail.thread.length > 1" class="mt-4 border border-line rounded-md divide-y divide-line text-sm">
+      <nav v-if="mail.thread.length > 1" class="mt-4 border border-line divide-y divide-line text-sm">
         <div class="px-3 py-1.5 text-xs text-muted font-mono">Thread · {{ mail.thread.length }}</div>
         <a v-for="t in mail.thread" @click="load(t.id)" class="block px-3 py-1.5 cursor-pointer hover:bg-surface"
            :class="{'bg-accent-soft': t.id === mail.id}">
