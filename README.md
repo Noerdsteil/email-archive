@@ -60,7 +60,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
 - `app.py`: FastAPI. `GET /api/search?q=&from=&since=&until=&human=&attachments=&n=`, `GET /api/email?id=`,
   `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
 - `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,
-  ↑↓ move the selection, Esc resets, `?q=` and `?id=` are linkable. Dark mode follows the OS.
+  ↑↓ move the selection, Esc resets. Query, all filters and the open mail live in the URL (`?q=&from=&since=&until=&human=1&attachments=1&id=`), so reload, bookmark and share keep the view. Dark mode follows the OS.
   With an empty query the list is the whole archive, newest first, loaded in pages of 30 as you scroll (keyset cursor `before=date|id`, no offsets).
 
 The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.

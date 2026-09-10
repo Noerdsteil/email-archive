@@ -80,7 +80,9 @@
 <script>
 const { createApp } = Vue;
 createApp({
-  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, attachments: false, results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
+  data: () => { const u = new URLSearchParams(location.search);   // filters live in the URL: reload/bookmark/share keeps them
+    return { q: u.get('q') || '', from: u.get('from') || '', since: u.get('since') || '', until: u.get('until') || '', human: u.get('human') === '1', attachments: u.get('attachments') === '1',
+             results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }; },
   computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; } },
   mounted() {
     this.io = new IntersectionObserver(es => { if (es[0].isIntersecting) this.more(); });   // ponytail: native, no lib; plain list is fine to ~10k rows
@@ -89,8 +91,13 @@ createApp({
   methods: {
     reset() { Object.assign(this, { q: '', from: '', since: '', until: '', human: false, attachments: false }); this.search(); this.$refs.q.focus(); },
     onType() { clearTimeout(this.timer); this.timer = setTimeout(this.search, 120); },   // ponytail: debounce = instant enough
+    syncUrl() {
+      const p = new URLSearchParams(); for (const k of ['q', 'from', 'since', 'until']) if (this[k]) p.set(k, this[k]);
+      for (const k of ['human', 'attachments']) if (this[k]) p.set(k, '1'); if (this.mail) p.set('id', this.mail.id);
+      history.replaceState(null, '', p.size ? '?' + p : location.pathname);
+    },
     async search() {
-      const id = ++this.seq, t = performance.now(); this.loading = true;
+      const id = ++this.seq, t = performance.now(); this.loading = true; this.syncUrl();
       const p = new URLSearchParams({ q: this.q, from: this.from, since: this.since, until: this.until, human: this.human, attachments: this.attachments });
       const r = await (await fetch('/api/search?' + p)).json();
       if (id !== this.seq) return;                                                        // a newer keystroke won
@@ -105,7 +112,7 @@ createApp({
       this.results.push(...r); this.next = r.at(-1)?.next || null;
     },
     open(r, i) { this.sel = i; this.load(r.id); },
-    async load(id) { this.mail = await (await fetch('/api/email?id=' + encodeURIComponent(id))).json(); },
+    async load(id) { this.mail = await (await fetch('/api/email?id=' + encodeURIComponent(id))).json(); this.syncUrl(); },
     move(d) { const i = Math.min(this.results.length - 1, Math.max(0, this.sel + d)); if (this.results[i]) this.open(this.results[i], i); },
   },
 }).mount('#app');
