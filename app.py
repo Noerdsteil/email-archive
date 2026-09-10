@@ -18,17 +18,22 @@ def index(): return FileResponse('static/index.html')
 
 @app.get('/api/search')
 def search(q: str = '', n: int = 30, from_: str | None = Query(None, alias='from'),
-           since: str | None = None, until: str | None = None, human: bool = False, attachments: bool = False):
+           since: str | None = None, until: str | None = None, human: bool = False, attachments: bool = False,
+           before: str | None = None):
     if q.strip():
         return gold.search(q, n, from_, since, until, human, attachments)
     c = gold.connect(); where, args = ['1=1'], []              # empty query: newest first, same filters
+    if before:                                                  # keyset cursor "date|id" from the last row -> infinite scroll
+        bd, _, bid = before.partition('|'); where.append("(coalesce(date,'') < ? or (coalesce(date,'') = ? and id < ?))"); args += [bd, bd, bid]
     if from_: where.append('from_addr like ?'); args.append(f'%{from_}%')
     if since: where.append('date >= ?'); args.append(since)
     if until: where.append('date <= ?'); args.append(until)
     if human: where.append('is_machine = 0')
     if attachments: where.append('has_attachments = 1')
-    rows = c.execute(f"select id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine,has_attachments from emails where {' and '.join(where)} order by date desc limit ?", [*args, n])
-    return [dict(r) | {'score': 0, 'matched': []} for r in rows]
+    rows = c.execute(f"select id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine,has_attachments from emails where {' and '.join(where)} order by coalesce(date,'') desc, id desc limit ?", [*args, n])
+    out = [dict(r) | {'score': 0, 'matched': []} for r in rows]
+    if len(out) == n: out[-1]['next'] = f"{out[-1]['date'] or ''}|{out[-1]['id']}"
+    return out
 
 
 @app.get('/api/email')

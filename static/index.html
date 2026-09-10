@@ -51,6 +51,7 @@
         </div>
       </li>
       <li v-if="!results.length && !loading" class="px-4 py-8 text-sm text-muted text-center">Keine Treffer</li>
+      <li ref="more" v-if="next" class="px-4 py-3 text-xs text-muted text-center font-mono">…</li>
     </ul>
 
     <article class="overflow-y-auto px-8 py-6" v-if="mail">
@@ -79,9 +80,12 @@
 <script>
 const { createApp } = Vue;
 createApp({
-  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, attachments: false, results: [], sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
+  data: () => ({ q: new URLSearchParams(location.search).get('q') || '', from: '', since: '', until: '', human: false, attachments: false, results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }),
   computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; } },
-  mounted() { this.search(); const id = new URLSearchParams(location.search).get('id'); if (id) this.load(id); },
+  mounted() {
+    this.io = new IntersectionObserver(es => { if (es[0].isIntersecting) this.more(); });   // ponytail: native, no lib; plain list is fine to ~10k rows
+    this.$watch('next', () => this.$nextTick(() => { this.io.disconnect(); if (this.$refs.more) this.io.observe(this.$refs.more); }));
+    this.search(); const id = new URLSearchParams(location.search).get('id'); if (id) this.load(id); },
   methods: {
     reset() { Object.assign(this, { q: '', from: '', since: '', until: '', human: false, attachments: false }); this.search(); this.$refs.q.focus(); },
     onType() { clearTimeout(this.timer); this.timer = setTimeout(this.search, 120); },   // ponytail: debounce = instant enough
@@ -90,7 +94,15 @@ createApp({
       const p = new URLSearchParams({ q: this.q, from: this.from, since: this.since, until: this.until, human: this.human, attachments: this.attachments });
       const r = await (await fetch('/api/search?' + p)).json();
       if (id !== this.seq) return;                                                        // a newer keystroke won
-      this.results = r; this.ms = Math.round(performance.now() - t); this.loading = false; this.sel = -1;
+      this.results = r; this.next = r.at(-1)?.next || null; this.ms = Math.round(performance.now() - t); this.loading = false; this.sel = -1;
+    },
+    async more() {
+      if (!this.next || this.loading) return;
+      const id = this.seq, cursor = this.next; this.loading = true; this.next = null;
+      const p = new URLSearchParams({ q: '', from: this.from, since: this.since, until: this.until, human: this.human, attachments: this.attachments, before: cursor });
+      const r = await (await fetch('/api/search?' + p)).json();
+      this.loading = false; if (id !== this.seq) return;
+      this.results.push(...r); this.next = r.at(-1)?.next || null;
     },
     open(r, i) { this.sel = i; this.load(r.id); },
     async load(id) { this.mail = await (await fetch('/api/email?id=' + encodeURIComponent(id))).json(); },

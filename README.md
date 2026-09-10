@@ -59,6 +59,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
 - `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,
   ↑↓ move the selection, Esc resets, `?q=` and `?id=` are linkable. Dark mode follows the OS.
+  With an empty query the list is the whole archive, newest first, loaded in pages of 30 as you scroll (keyset cursor `before=date|id`, no offsets).
 
 The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.
 
