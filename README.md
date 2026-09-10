@@ -1,70 +1,82 @@
 # email-archive
 
-Local, searchable archive of ~12k emails. Concept and decisions: `JonasWiki/EMAIL RAG Archive/`.
+A searchable, private archive of your own email. Export your mailboxes once, drop them in a folder,
+and get instant keyword + semantic search with a reading pane, threads and attachments in the browser.
+Everything runs locally in one Docker container; nothing leaves your machine. Built to have a mail archive
+that outlives mail clients and providers, and to learn how RAG-style search works on real data.
 
-```
-bronze/   Apple Mail mbox exports (Name.mbox/mbox). Sent folders suffixed `_Sent`, e.g. `Family_Sent.mbox`.  gitignored
-silver/   emails.jsonl, one cleaned record per mail.                                 gitignored
-models/   pinned embedding model (fastembed, offline).                                gitignored
-gold      SQLite file: FTS5 + sqlite-vec + metadata columns.                          later
-```
+## Getting started
 
-## Silver
+You need Docker (Docker Desktop, OrbStack, or plain Docker Engine). Nothing else.
+
+1. **Get the folder** — clone this repo, or unzip an export made with `./export.sh`.
+2. **Set your addresses** in `compose.yaml` (`OWN_ADDRESSES`). This decides which mails count as sent.
+   Whole domains work: `@example.com`.
+3. **Start it**
+   ```sh
+   docker compose up -d
+   ```
+   The first run builds the image and downloads the embedding model (~310 MB, a few minutes). Open http://localhost:8000.
+   If the folder came from an export it already contains `gold.db`, and you are done.
+4. **Import mail** (skip if `gold.db` came with the folder)
+   - Export mailboxes as mbox. Apple Mail: select a mailbox, *Mailbox → Export Mailbox…*, save into `bronze/`.
+     Any `*.mbox` folder or file and any `*.eml` files under `bronze/` are picked up.
+   - ```sh
+     docker compose run --rm app python parse.py          # bronze -> silver/emails.jsonl, prints metrics
+     docker compose run --rm app python gold.py build     # silver -> gold.db, ~4 mails/s, resumable with Ctrl+C
+     docker compose restart
+     ```
+5. **Add mail later**: drop more mbox files into `bronze/` and repeat step 4. Both commands only add what is new.
+
+Changed a `.py` file? `docker compose restart`. HTML/JS in `static/` reloads live.
+
+## Move it to another machine
 
 ```sh
-OWN_ADDRESSES="me@a.de,me@b.com" python3 parse.py     # bronze -> silver, prints metrics
-python3 test_parse.py                                 # self-check
+./export.sh        # -> email-archive-YYYYMMDD.zip with code, gold.db, silver/, bronze/
 ```
 
-Python 3.13 from Homebrew (`/opt/homebrew/bin/python3.13`): the system Python's sqlite lacks extension loading, which gold needs for sqlite-vec.
+Unzip on the target, `docker compose up -d`. `bronze/` is included because attachments are read from it on demand;
+`.git`, `.venv` and `models/` are not (the model is inside the image).
 
-## Embedding model
+## How it works
 
-`jinaai/jina-embeddings-v2-base-de` via fastembed: German+English, 8192 tokens, 768 dim, ~310 MB. One vector per email, no chunking.
+Three layers, each rebuildable from the one below. Nothing is ever the only copy.
+
+| Layer | What | Where |
+|---|---|---|
+| bronze | raw mbox exports, never modified | `bronze/` |
+| silver | one cleaned JSON record per mail | `silver/emails.jsonl` |
+| gold | search index: metadata columns + FTS5 + vectors | `gold.db` (SQLite) |
+
+- `parse.py` (stdlib only): decodes MIME, picks plain over HTML, strips quoted replies and signatures, dedupes on Message-ID,
+  threads via References, flags machine mail from headers, derives sent/received from your addresses, records where each
+  mail lives in bronze. Prints metrics at the end.
+- `gold.py`: embeds every mail with `jinaai/jina-embeddings-v2-base-de` (German + English, 8192 tokens, one vector per mail)
+  via fastembed/ONNX on CPU, stores FTS5 + sqlite-vec + columns in one file. `search()` fuses BM25 and vector ranks
+  (reciprocal rank fusion) and applies filters as SQL. ~10 ms per query.
+- `app.py`: FastAPI. `GET /api/search?q=&from=&since=&until=&human=&attachments=&n=`, `GET /api/email?id=`,
+  `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
+- `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,
+  ↑↓ move the selection, Esc resets, `?q=` and `?id=` are linkable. Dark mode follows the OS.
+
+The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.
+
+## Local development without Docker
+
+Needs a Python whose sqlite allows extension loading (Homebrew `python3.13` on macOS; the system Python does not).
 
 ```sh
 /opt/homebrew/bin/python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -c 'from fastembed import TextEmbedding; TextEmbedding("jinaai/jina-embeddings-v2-base-de", cache_dir="models")'   # downloads into models/
+OWN_ADDRESSES="@example.com" .venv/bin/python parse.py
+.venv/bin/python gold.py build                       # downloads the model into ./models on first run
+.venv/bin/uvicorn app:app --reload --port 8000
+.venv/bin/python test_parse.py                       # parser self-check
 ```
 
-`onnxruntime` is pinned to 1.22.1: 1.29 returns NaN and 1.23+ fails to load this model on arm64. Throughput ~6 emails/s on CPU.
+`onnxruntime` is pinned to 1.22.1: 1.29 returns NaN and 1.23+ fails to load this model on arm64.
 
-## Gold
+## Not built yet
 
-```sh
-.venv/bin/python gold.py build [--limit 200] [--rebuild]   # silver -> gold.db, upserts only new ids, embeds
-.venv/bin/python gold.py search "Rechnung" --human --from 1und1 --since 2021-01-01 -n 10
-```
-
-`gold.db` = one SQLite file: `emails` (metadata columns), `fts` (FTS5, external content), `vec` (sqlite-vec, 768 float).
-Search = BM25 top-k + vector top-k, merged with reciprocal rank fusion, filters applied as SQL. ~10 ms per query after model load.
-The model name is stored in `meta`; a mismatch with `gold.py` refuses to start.
-
-## Web UI + API
-
-```sh
-.venv/bin/uvicorn app:app --reload --port 8000     # http://localhost:8000
-```
-
-`app.py` = FastAPI over `gold.search()`: `GET /api/search?q=&from=&since=&until=&human=&n=` (empty q → newest first) and `GET /api/email?id=` (full mail + thread).
-`static/index.html` = one file, Vue 3 + Tailwind v4 from CDN, no build step. Tokens (oklch palette, Inter / Space Grotesk / JetBrains Mono) copied from joschwe-site; dark mode follows the OS.
-Search fires 120 ms after the last keystroke, stale responses are dropped, ↑↓ moves the selection.
-
-## Docker
-
-```sh
-docker compose up -d                                  # http://localhost:8000
-docker compose run --rm app python parse.py           # bronze -> silver
-docker compose run --rm app python gold.py build      # silver -> gold.db (add --rebuild after parser changes)
-docker compose restart                                # after a --rebuild, so the server reopens gold.db
-```
-
-Image = python:3.13-slim + requirements (~430 MB). The project folder is bind-mounted to `/app`, so code, `models/`,
-`gold.db`, `bronze/` and `silver/` all come from the folder: copying the folder is the deployment.
-Vue and Tailwind are vendored in `static/vendor/`; only the Google Fonts still load from the network and fall back to system fonts offline.
-Verified 2026-09-05 on linux/arm64: onnxruntime 1.22.1 loads the model and returns real vectors.
-
-## Attachments
-
-Silver records where each mail lives in bronze (`source: [file, start, stop]`); `gold.py build` copies that into a `sources` table (no embedding, refreshed every run).
-`GET /api/attachment?id=&name=` re-reads that one message from the mbox by byte range and streams the part. Nothing is extracted to disk, but `bronze/` must stay in place and unchanged; after a re-export, rerun parse + build.
+MCP server over the same two endpoints, chat against a local LLM, an LLM pass to classify the machine mail that header
+rules miss, attachment text extraction. Concept and decisions: `JonasWiki/EMAIL RAG Archive/`.

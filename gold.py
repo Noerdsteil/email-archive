@@ -9,6 +9,7 @@ import sqlite_vec
 from fastembed import TextEmbedding
 
 DB, SILVER, MODEL, DIM = 'gold.db', 'silver/emails.jsonl', 'jinaai/jina-embeddings-v2-base-de', 768
+MODEL_DIR = os.environ.get('MODEL_DIR', 'models')     # Docker: /models baked into the image; local .venv: ./models
 _model = None
 
 
@@ -16,7 +17,7 @@ def model():
     global _model
     if _model is None:
         os.environ.setdefault('HF_HUB_OFFLINE', '1')          # models/ is the only source after first download
-        _model = TextEmbedding(MODEL, cache_dir='models')
+        _model = TextEmbedding(MODEL, cache_dir=MODEL_DIR)
     return _model
 
 

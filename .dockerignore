@@ -6,3 +6,4 @@ gold.db
 .git
 __pycache__
 .DS_Store
+email-archive-*.zip

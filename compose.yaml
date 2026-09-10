@@ -1,13 +1,14 @@
-# docker compose up -d                         -> http://localhost:8000
-# docker compose run --rm app python parse.py  -> bronze -> silver
-# docker compose run --rm app python gold.py build [--rebuild]
+# docker compose up -d                                   -> http://localhost:8000  (first run builds the image incl. model download)
+# docker compose run --rm app python parse.py            -> bronze -> silver
+# docker compose run --rm app python gold.py build       -> silver -> gold.db (resumable; --rebuild after parser changes)
+# docker compose restart                                 -> after any .py change or a --rebuild
 services:
   app:
     build: .
     ports: ["8000:8000"]
-    # ponytail: the whole folder is the state. Code, models/, gold.db, bronze/, silver/ all come from here,
-    # so "copy the folder" is the deployment and the image only carries Python + dependencies.
+    # ponytail: the whole folder is the state. Code, gold.db, bronze/, silver/ all come from here,
+    # so "copy the folder" is the deployment. The image carries Python, dependencies and the embedding model.
     volumes: [".:/app"]
     environment:
-      OWN_ADDRESSES: "@example.com"
+      OWN_ADDRESSES: "@example.com"   # your addresses or @domains, comma separated: decides sent vs. received
     restart: unless-stopped
