@@ -59,6 +59,8 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   (reciprocal rank fusion) and applies filters as SQL. ~10 ms per query.
 - `app.py`: FastAPI. `GET /api/search?q=&from=&since=&until=&human=&attachments=&n=`, `GET /api/email?id=`,
   `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
+  Also an MCP server at `/mcp` (official `mcp` SDK, Streamable HTTP, same process) with two tools that call the same
+  functions: `search_emails` (metadata + snippet per hit) and `get_email` (full cleaned text + thread). See below.
 - `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,
   ↑↓ move the selection, Esc resets. Query, all filters and the open mail live in the URL (`?q=&from=&since=&until=&human=1&attachments=1&id=`), so reload, bookmark and share keep the view. Dark mode follows the OS.
   With an empty query the list is the whole archive, newest first, loaded in pages of 30 as you scroll (keyset cursor `before=date|id`, no offsets).
@@ -66,6 +68,22 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
 
 The model name is stored in `gold.db`; a mismatch with the code refuses to start. Rebuild with `gold.py build --rebuild`.
 `sources` and `classes` are side tables refreshed on every build without re-embedding, so classifier changes cost seconds, not an hour.
+
+## Use it from an AI client (MCP)
+
+The server speaks MCP at `http://localhost:8000/mcp`. Two tools: `search_emails(q, from_, since, until, human, attachments, n)`
+returns short hits, `get_email(id)` returns one mail with quotes stripped plus its thread. Results are kept small on purpose so
+a model can search a few times before reading a mail.
+
+```sh
+claude mcp add --transport http email-archive http://localhost:8000/mcp   # Claude Code
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp            # click through the tools by hand
+python test_mcp.py                                                       # self-check, prints counts only
+```
+
+Anything you connect reads your mail. A cloud model sees every mail it fetches; the concept here is a local LLM
+(Open WebUI, LM Studio and Ollama front-ends speak MCP over HTTP). The endpoint accepts localhost only; if you ever expose
+it beyond the machine, put a token in front of `/mcp` first.
 
 ## Local development without Docker
 
@@ -83,5 +101,5 @@ OWN_ADDRESSES="@example.com" .venv/bin/python parse.py
 
 ## Not built yet
 
-MCP server over the same two endpoints, chat against a local LLM, an LLM pass to classify the machine mail that header
+Chat against a local LLM, an LLM pass to classify the machine mail that header
 rules miss, attachment text extraction. Concept and decisions: `JonasWiki/EMAIL RAG Archive/`.

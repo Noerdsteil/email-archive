@@ -1,14 +1,26 @@
-"""Search API + static UI.  Run: .venv/bin/uvicorn app:app --reload --port 8000  ->  http://localhost:8000"""
-# ponytail: thin HTTP layer over gold.search(); the MCP server calls the same endpoints.
+"""Search API + static UI + MCP.  Run: .venv/bin/uvicorn app:app --reload --port 8000  ->  http://localhost:8000, MCP at /mcp"""
+# ponytail: thin HTTP layer over gold.search(); the MCP tools below call the same functions, no search logic of their own.
 import json
+from typing import Any
+from contextlib import asynccontextmanager
 from urllib.parse import quote
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from mcp.server.mcpserver import MCPServer
 import gold, parse
 
-app = FastAPI(title='email-archive')
-app.add_event_handler('startup', gold.model)   # load the embedding model once, not on first query
+mcp = MCPServer('email-archive', instructions=(
+    'Private personal email archive, German and English. Call search_emails first (short results), then get_email for the '
+    'full text of the one or two mails that matter. Dates are ISO (YYYY-MM-DD). human=true keeps only mail from real people.'))
+
+
+@asynccontextmanager
+async def lifespan(app):
+    gold.model()                                   # load the embedding model once, not on first query
+    async with mcp.session_manager.run(): yield    # mounted apps do not get their own lifespan run
+
+app = FastAPI(title='email-archive', lifespan=lifespan)
 app.mount('/static', StaticFiles(directory='static'), name='static')
 
 
@@ -56,3 +68,26 @@ def attachment(id: str, name: str):
             return Response(part.get_payload(decode=True), media_type=part.get_content_type(),
                             headers={'Content-Disposition': f"inline; filename*=UTF-8''{quote(name)}"})
     raise HTTPException(404, 'attachment not found')
+
+
+# --- MCP: two tools over the same functions. Descriptions are what the model sees; keep them honest and results small.
+@mcp.tool()
+def search_emails(q: str, from_: str = '', since: str = '', until: str = '', human: bool = False, attachments: bool = False, n: int = 10) -> list[dict]:
+    """Hybrid keyword + semantic search over the personal mail archive. q may be German or English, a phrase or a topic.
+    from_ filters the sender address (substring), since/until are ISO dates, human=true drops newsletters and automated mail,
+    attachments=true keeps only mail with attachments. Returns id, date, from, subject, a 160-char snippet and sender_class per hit."""
+    hits = gold.search(q, n, from_ or None, since or None, until or None, human, attachments)
+    return [{k: h[k] for k in ('id', 'date', 'from_addr', 'from_name', 'subject', 'snippet', 'sender_class', 'has_attachments')} for h in hits]
+
+
+@mcp.tool()
+def get_email(id: str) -> dict[str, Any]:
+    """Full text of one mail by id (from search_emails), quotes and signatures stripped, plus recipients, folder, direction,
+    attachment file names and the thread it belongs to (id, date, from, subject per message)."""
+    e = email(id)
+    if 'error' in e: return e
+    e['body'] = gold.connect().execute('select body from emails where id=?', (id,)).fetchone()[0]
+    return {k: e[k] for k in ('id', 'date', 'from_addr', 'from_name', 'to_addrs', 'subject', 'folder', 'direction', 'sender_class', 'attachments', 'body', 'thread')}
+
+
+app.mount('/mcp', mcp.streamable_http_app(streamable_http_path='/', stateless_http=True, json_response=True))   # localhost-only by default (DNS-rebinding guard)
