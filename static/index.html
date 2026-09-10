@@ -8,23 +8,22 @@
 <script src="/static/vendor/tailwind-browser.js"></script>
 <script src="/static/vendor/vue.global.prod.js"></script>
 <style type="text/tailwindcss">
-  /* Everforest, as shipped by Omarchy (themes/everforest/colors.toml = dark medium, accent = blue). Light = Everforest light medium. */
-  :root { --c-bg: #2d353b; --c-surface: #343f44; --c-ink: #d3c6aa; --c-muted: #859289; --c-line: #475258; --c-accent: #7fbbb3; --c-accent-soft: #3a515d; --c-green: #a7c080; --c-red: #e67e80; --c-yellow: #dbbc7f; --c-sel: #d3c6aa; }
-  @media (prefers-color-scheme: light) { :root { --c-bg: #fdf6e3; --c-surface: #f4f0d9; --c-ink: #5c6a72; --c-muted: #939f91; --c-line: #e6e2cc; --c-accent: #3a94c5; --c-accent-soft: #e9f0e9; --c-green: #8da101; --c-red: #f85552; --c-yellow: #dfa000; --c-sel: #e0dcc7; } }
+  /* Everforest as shipped by Omarchy (themes/everforest/colors.toml, dark medium, accent = blue). Dark only, like omarchy.org. */
+  :root { color-scheme: dark; --c-bg: #2d353b; --c-dim: #232a2e; --c-surface: #343f44; --c-ink: #d3c6aa; --c-muted: #9da9a0; --c-line: #475258; --c-accent: #7fbbb3; --c-accent-soft: #3a515d; --c-green: #a7c080; --c-red: #e67e80; --c-yellow: #dbbc7f; --c-sel: #d3c6aa; }
   @theme inline {
-    --color-bg: var(--c-bg); --color-surface: var(--c-surface); --color-ink: var(--c-ink); --color-muted: var(--c-muted);
+    --color-bg: var(--c-bg); --color-dim: var(--c-dim); --color-surface: var(--c-surface); --color-ink: var(--c-ink); --color-muted: var(--c-muted);
     --color-line: var(--c-line); --color-accent: var(--c-accent); --color-accent-soft: var(--c-accent-soft); --color-green: var(--c-green); --color-red: var(--c-red); --color-yellow: var(--c-yellow);
-    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif; --font-display: "Cascadia Mono", ui-monospace, monospace; --font-mono: "Cascadia Mono", ui-monospace, monospace;
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif; --font-display: "Inter", ui-sans-serif, system-ui, sans-serif; --font-mono: "Cascadia Mono", ui-monospace, monospace;
   }
-  body { @apply bg-bg text-ink font-sans antialiased; }
+  body { @apply bg-bg text-ink font-mono antialiased; }   /* omarchy.org: mono body, sans headings */
   ::selection { background: var(--c-sel); color: var(--c-bg); }
   input, select { @apply bg-surface border border-line px-3 py-1.5 text-sm outline-none focus:border-accent; }
 </style>
 </head>
 <body class="h-screen overflow-hidden">
 <div id="app" class="h-full flex flex-col">
-  <header class="border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
-    <h1 class="font-display font-semibold text-lg tracking-tight mr-2"><span class="text-green">~</span>/email-archive</h1>
+  <header class="bg-dim border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
+    <h1 class="font-mono font-semibold text-lg tracking-tight mr-2"><span class="text-green">~</span>/email-archive</h1>
     <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.esc="reset"
            placeholder="Suche … (↑↓ navigieren)" class="flex-1 min-w-64 !py-2" autofocus>
     <input v-model="from" @input="onType" placeholder="von" class="w-36">
@@ -32,7 +31,7 @@
     <input v-model="until" @input="onType" type="date" class="w-36">
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">mit Anhang</label>
-    <button v-if="active" @click="reset" class="text-sm text-accent hover:underline">Zurücksetzen</button>
+    <button v-if="active" @click="reset" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90">Zurücksetzen</button>
     <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
   </header>
 
@@ -44,8 +43,8 @@
           <span class="truncate">{{ r.from_name || r.from_addr }}</span>
           <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="Anhang">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
         </div>
-        <div class="text-sm font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-yellow font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
-        <div class="text-xs text-muted truncate">{{ r.snippet }}</div>
+        <div class="text-sm font-sans font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-yellow font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
+        <div class="text-xs text-muted truncate font-sans">{{ r.snippet }}</div>
         <div v-if="r.matched.length" class="mt-0.5 flex gap-1">
           <span v-for="m in r.matched" class="text-[10px] font-mono px-1 bg-surface" :class="m === 'fts' ? 'text-green' : 'text-accent'">{{ m }}</span>
         </div>
@@ -72,7 +71,7 @@
           <span class="font-mono text-xs text-muted mr-2">{{ (t.date||'').slice(0,10) }}</span>{{ t.from_name || t.from_addr }} — {{ t.subject }}
         </a>
       </nav>
-      <pre class="mt-6 whitespace-pre-wrap font-sans text-[15px] leading-relaxed">{{ mail.body_raw.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() }}</pre>
+      <pre class="mt-6 whitespace-pre-wrap text-[14px] leading-relaxed">{{ mail.body_raw.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() }}</pre>
     </article>
     <div v-else class="flex items-center justify-center text-muted text-sm">Wähle eine E-Mail</div>
   </main>
