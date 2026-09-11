@@ -1,7 +1,8 @@
 """One-time: dump every image attached to mail from/to contacts (sender_class = human) into a folder.
    python export_images.py [out_dir] [min_kb]     default exports/images, 50 KB (drops signature logos and tracking pixels)"""
 # ponytail: reads silver for the list, bronze for the bytes (same path the attachment endpoint uses). No DB, no state.
-import sys, json, re, hashlib, pathlib
+import sys, os, json, re, hashlib, pathlib
+from datetime import datetime
 import parse
 
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'exports/images'); out.mkdir(parents=True, exist_ok=True)
@@ -20,6 +21,7 @@ for r in recs:
         who = re.sub(r'[^a-z0-9]+', '-', (r['from'][0]['addr'] if r['from'] else 'unknown').split('@')[0].lower()).strip('-')
         name = re.sub(r'[^\w.\-]+', '_', part.get_filename() or f"inline.{part.get_content_subtype()}")
         stem, ext = name.rsplit('.', 1) if '.' in name else (name, part.get_content_subtype())
-        (out / f"{(r['date'] or 'undated')[:10]}_{who}_{h[:6]}_{stem[:80]}.{ext}").write_bytes(data); n_written += 1
+        f = out / f"{(r['date'] or 'undated')[:10]}_{who}_{h[:6]}_{stem[:80]}.{ext}"; f.write_bytes(data); n_written += 1
+        if r['date']: ts = datetime.fromisoformat(r['date']).timestamp(); os.utime(f, (ts, ts))   # file date = mail date; macOS pulls the creation date back too
     n_mails_with += found
 print(f"{len(recs)} human mails scanned, {n_img} image parts, {n_small} below {min_bytes // 1024} KB, {n_written} unique images written from {n_mails_with} mails -> {out}/")
