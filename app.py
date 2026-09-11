@@ -8,7 +8,7 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from mcp.server.mcpserver import MCPServer
-import gold, parse
+import gold, parse, export_images
 
 mcp = MCPServer('email-archive', instructions=(
     'Private personal email archive, German and English. Call search_emails first (short results), then get_email for the '
@@ -34,15 +34,10 @@ def search(q: str = '', n: int = 30, from_: str | None = Query(None, alias='from
            before: str | None = None):
     if q.strip():
         return gold.search(q, n, from_, since, until, human, attachments)
-    c = gold.connect(); where, args = ['1=1'], []              # empty query: newest first, same filters
+    c = gold.connect(); where, args = gold.filters(from_, since, until, human, attachments); where.append('1=1')   # empty query: newest first, same filters
     if before:                                                  # keyset cursor "date|id" from the last row -> infinite scroll
-        bd, _, bid = before.partition('|'); where.append("(coalesce(date,'') < ? or (coalesce(date,'') = ? and e.id < ?))"); args += [bd, bd, bid]
-    if from_: where.append('from_addr like ?'); args.append(f'%{from_}%')
-    if since: where.append('date >= ?'); args.append(since)
-    if until: where.append('date <= ?'); args.append(until)
-    if human: where.append("e.id in (select id from classes where sender_class='human')")
-    if attachments: where.append('has_attachments = 1')
-    rows = c.execute(f"select e.id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine,has_attachments,coalesce(sender_class,'unknown') sender_class from emails e left join classes using(id) where {' and '.join(where)} order by coalesce(date,'') desc, e.id desc limit ?", [*args, n])
+        bd, _, bid = before.partition('|'); where.append("(coalesce(date,'') < ? or (coalesce(date,'') = ? and emails.id < ?))"); args += [bd, bd, bid]
+    rows = c.execute(f"select emails.id,thread_id,date,folder,direction,from_addr,from_name,subject,substr(body,1,160) snippet,is_machine,has_attachments,coalesce(sender_class,'unknown') sender_class from emails left join classes using(id) where {' and '.join(where)} order by coalesce(date,'') desc, emails.id desc limit ?", [*args, n])
     out = [dict(r) | {'score': 0, 'matched': []} for r in rows]
     if len(out) == n: out[-1]['next'] = f"{out[-1]['date'] or ''}|{out[-1]['id']}"
     return out
@@ -68,6 +63,16 @@ def attachment(id: str, name: str):
             return Response(part.get_payload(decode=True), media_type=part.get_content_type(),
                             headers={'Content-Disposition': f"inline; filename*=UTF-8''{quote(name)}"})
     raise HTTPException(404, 'attachment not found')
+
+
+@app.post('/api/export-images')
+def export_images_api(from_: str | None = Query(None, alias='from'), since: str | None = None, until: str | None = None,
+                      human: bool = False, attachments: bool = False, min_kb: int = export_images.MIN_KB):
+    """Writes every image from the mails matching the UI filters to exports/images (bind mount -> next to the archive).
+    Blocking on purpose: runs in FastAPI's threadpool, the UI shows a spinner. ponytail: one export at a time is plenty."""
+    where, args = gold.filters(from_, since, until, human, attachments); where.append('1=1')
+    rows = gold.connect().execute(f"select date, from_addr, file, start, stop from emails join sources using(id) where {' and '.join(where)}", args)
+    return export_images.run({'date': r['date'], 'from_addr': r['from_addr'], 'source': [r['file'], r['start'], r['stop']]} for r in rows)
 
 
 # --- MCP: two tools over the same functions. Descriptions are what the model sees; keep them honest and results small.

@@ -59,6 +59,10 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   (reciprocal rank fusion) and applies filters as SQL. ~10 ms per query.
 - `app.py`: FastAPI. `GET /api/search?q=&from=&since=&until=&human=&attachments=&n=`, `GET /api/email?id=`,
   `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
+  `POST /api/export-images?from=&since=&until=&human=&attachments=&min_kb=50` writes every image from the matching mails
+  to `exports/images/` (next to the archive, via the bind mount), named `date_sender_hash_name`, file date = mail date,
+  logos under 50 KB skipped, duplicates once. The "Bilder" button in the UI opens a dialog that runs it with the current filters.
+  `python export_images.py` does the same once for all mail from contacts.
   Also an MCP server at `/mcp` (official `mcp` SDK, Streamable HTTP, same process) with two tools that call the same
   functions: `search_emails` (metadata + snippet per hit) and `get_email` (full cleaned text + thread). See below.
 - `static/index.html`: Vue 3 + Tailwind v4, vendored, no build step. Search fires 120 ms after the last keystroke,

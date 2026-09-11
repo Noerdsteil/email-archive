@@ -32,6 +32,7 @@
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
     <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">mit Anhang</label>
     <button v-if="active" @click="reset" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90">Zurücksetzen</button>
+    <button @click="$refs.dlg.showModal()" class="text-sm border border-line px-3 py-1.5 hover:border-accent" title="Bilder aus den gefilterten E-Mails exportieren">Bilder</button>
     <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
   </header>
 
@@ -75,14 +76,28 @@
     </article>
     <div v-else class="flex items-center justify-center text-muted text-sm">Wähle eine E-Mail</div>
   </main>
+<dialog ref="dlg" class="bg-surface text-ink border border-line p-6 w-[32rem] max-w-[90vw] backdrop:bg-black/60 m-auto">
+  <h2 class="font-display font-semibold text-lg border-l-2 border-accent pl-3">Bilder exportieren</h2>
+  <p class="mt-3 text-sm leading-relaxed">Speichert alle Bilder aus den E-Mails, die den aktuellen Filtern entsprechen, nach <span class="text-accent">exports/images/</span> neben dem Archiv. Der Suchbegriff zählt nicht, die Filter schon:</p>
+  <p class="mt-2 text-sm text-accent">{{ filterSummary }}</p>
+  <p class="mt-2 text-sm text-muted leading-relaxed">Bilder unter 50 KB (Logos, Signaturen) werden übersprungen, identische Bilder nur einmal gespeichert. Dateiname = Datum_Absender_Name, Dateidatum = Maildatum. Vorhandene Dateien werden überschrieben. Dauert je nach Menge einige Minuten.</p>
+  <p v-if="exported" class="mt-3 text-sm text-green">{{ exported.written }} Bilder aus {{ exported.mails_with }} von {{ exported.mails }} E-Mails geschrieben ({{ exported.small }} zu klein übersprungen) → {{ exported.out }}/</p>
+  <div class="mt-5 flex justify-end gap-3">
+    <button @click="$refs.dlg.close()" class="text-sm border border-line px-3 py-1.5 hover:border-accent">{{ exported ? 'Schließen' : 'Abbrechen' }}</button>
+    <button @click="exportImages" :disabled="exporting" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90 disabled:opacity-60">
+      <span v-if="exporting" class="inline-block animate-spin mr-1">◐</span>{{ exporting ? 'Exportiert …' : 'Jetzt exportieren' }}</button>
+  </div>
+</dialog>
 </div>
 <script>
 const { createApp } = Vue;
 createApp({
   data: () => { const u = new URLSearchParams(location.search);   // filters live in the URL: reload/bookmark/share keeps them
     return { q: u.get('q') || '', from: u.get('from') || '', since: u.get('since') || '', until: u.get('until') || '', human: u.get('human') === '1', attachments: u.get('attachments') === '1',
-             results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0 }; },
-  computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; } },
+             results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0, exporting: false, exported: null }; },
+  computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; },
+    filterSummary() { const f = []; if (this.from) f.push('von ' + this.from); if (this.since) f.push('ab ' + this.since); if (this.until) f.push('bis ' + this.until);
+      if (this.human) f.push('nur Menschen'); if (this.attachments) f.push('mit Anhang'); return f.length ? f.join(' · ') : 'keine Filter → das ganze Archiv'; } },
   mounted() {
     this.io = new IntersectionObserver(es => { if (es[0].isIntersecting) this.more(); });   // ponytail: native, no lib; plain list is fine to ~10k rows
     this.$watch('next', () => this.$nextTick(() => { this.io.disconnect(); if (this.$refs.more) this.io.observe(this.$refs.more); }));
@@ -109,6 +124,11 @@ createApp({
       const r = await (await fetch('/api/search?' + p)).json();
       this.loading = false; if (id !== this.seq) return;
       this.results.push(...r); this.next = r.at(-1)?.next || null;
+    },
+    async exportImages() {
+      this.exporting = true; this.exported = null;
+      const p = new URLSearchParams({ from: this.from, since: this.since, until: this.until, human: this.human, attachments: this.attachments });
+      try { this.exported = await (await fetch('/api/export-images?' + p, { method: 'POST' })).json(); } finally { this.exporting = false; }
     },
     open(r, i) { this.sel = i; this.load(r.id); },
     async load(id) { this.mail = await (await fetch('/api/email?id=' + encodeURIComponent(id))).json(); this.syncUrl(); },

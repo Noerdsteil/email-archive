@@ -87,14 +87,20 @@ def fts_query(q):
     return ' '.join(f'"{t}"' for t in toks[:-1]) + (f' "{toks[-1]}"*' if toks else '')   # prefix match on last token
 
 
-def search(q, n=10, from_=None, since=None, until=None, human=False, attachments=False, k=60):
-    c = connect()
+def filters(from_=None, since=None, until=None, human=False, attachments=False):
+    """The UI filters as SQL on the `emails` table -> (clauses, args). Shared by search, browse and export."""
     where, args = [], []
     if from_: where.append('emails.from_addr like ?'); args.append(f'%{from_}%')
     if since: where.append('emails.date >= ?'); args.append(since)
     if until: where.append('emails.date <= ?'); args.append(until)
     if human: where.append("emails.id in (select id from classes where sender_class='human')")
     if attachments: where.append('emails.has_attachments = 1')
+    return where, args
+
+
+def search(q, n=10, from_=None, since=None, until=None, human=False, attachments=False, k=60):
+    c = connect()
+    where, args = filters(from_, since, until, human, attachments)
     filt = (' and ' + ' and '.join(where)) if where else ''
 
     fts = c.execute(f'select fts.rowid from fts join emails on emails.rowid = fts.rowid where fts match ? {filt} order by bm25(fts) limit ?', [fts_query(q), *args, k]).fetchall()
