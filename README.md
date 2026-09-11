@@ -53,7 +53,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   threads via References, derives sent/received from your addresses, records where each mail lives in bronze, and
   classifies every sender as **human / machine / unknown**: everyone you ever wrote to (To/Cc of your sent mail, written
   to `silver/contacts.json`) is human, header and address patterns (List-Id, noreply, info@, …) are machine, the rest is
-  unknown; threads inherit human. "nur Menschen" in the UI means human only; unknown rows carry a `?`. Prints metrics at the end.
+  unknown; threads inherit human. "people only" in the UI means human only; unknown rows carry a `?`. Prints metrics at the end.
 - `gold.py`: embeds every mail with `jinaai/jina-embeddings-v2-base-de` (German + English, 8192 tokens, one vector per mail)
   via fastembed/ONNX on CPU, stores FTS5 + sqlite-vec + columns in one file. `search()` fuses BM25 and vector ranks
   (reciprocal rank fusion) and applies filters as SQL. ~10 ms per query.
@@ -61,7 +61,7 @@ Three layers, each rebuildable from the one below. Nothing is ever the only copy
   `GET /api/attachment?id=&name=` (re-read from bronze by byte range, nothing extracted to disk).
   `POST /api/export-images?from=&since=&until=&human=&attachments=&min_kb=50` writes every image from the matching mails
   to `exports/images/` (next to the archive, via the bind mount), named `date_sender_hash_name`, file date = mail date,
-  logos under 50 KB skipped, duplicates once. The "Bilder" button in the UI opens a dialog that runs it with the current filters.
+  logos under 50 KB skipped, duplicates once. The "Images" button in the UI opens a dialog that runs it with the current filters.
   `python export_images.py` does the same once for all mail from contacts.
   Also an MCP server at `/mcp` (official `mcp` SDK, Streamable HTTP, same process) with two tools that call the same
   functions: `search_emails` (metadata + snippet per hit) and `get_email` (full cleaned text + thread). See below.

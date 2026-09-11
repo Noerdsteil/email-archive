@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Archive</title>
@@ -25,14 +25,14 @@
   <header class="bg-dim border-b border-line px-5 py-3 flex flex-wrap items-center gap-3">
     <h1 class="font-mono font-semibold text-lg tracking-tight mr-2"><span class="text-green">~</span>/email-archive</h1>
     <input ref="q" v-model="q" @input="onType" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.esc="reset"
-           placeholder="Suche … (↑↓ navigieren)" class="flex-1 min-w-64 !py-2" autofocus>
-    <input v-model="from" @input="onType" placeholder="von" class="w-36">
+           placeholder="Search … (↑↓ to navigate)" class="flex-1 min-w-64 !py-2" autofocus>
+    <input v-model="from" @input="onType" placeholder="from" class="w-36">
     <input v-model="since" @input="onType" type="date" class="w-36">
     <input v-model="until" @input="onType" type="date" class="w-36">
-    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">nur Menschen</label>
-    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">mit Anhang</label>
-    <button v-if="active" @click="reset" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90">Zurücksetzen</button>
-    <button @click="$refs.dlg.showModal()" class="text-sm border border-line px-3 py-1.5 hover:border-accent" title="Bilder aus den gefilterten E-Mails exportieren">Bilder</button>
+    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="human" @change="onType" class="accent-accent">people only</label>
+    <label class="flex items-center gap-1.5 text-sm text-muted select-none"><input type="checkbox" v-model="attachments" @change="onType" class="accent-accent">with attachments</label>
+    <button v-if="active" @click="reset" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90">Reset</button>
+    <button @click="$refs.dlg.showModal()" class="text-sm border border-line px-3 py-1.5 hover:border-accent" title="Export images from the filtered mails">Images</button>
     <span class="text-xs text-muted font-mono tabular-nums">{{ results.length }} · {{ ms }} ms</span>
   </header>
 
@@ -42,26 +42,26 @@
           class="px-4 py-2.5 cursor-pointer hover:bg-surface border-l-2 border-transparent" :class="{'bg-accent-soft !border-accent': i === sel}">
         <div class="flex justify-between gap-2 text-xs text-muted">
           <span class="truncate">{{ r.from_name || r.from_addr }}</span>
-          <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="Anhang">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
+          <span class="font-mono tabular-nums shrink-0"><span v-if="r.has_attachments" title="attachment">📎 </span>{{ (r.date||'').slice(0,10) }}</span>
         </div>
-        <div class="text-sm font-sans font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-yellow font-mono text-xs mr-1" title="unbekannter Absender">?</span>{{ r.subject || '(kein Betreff)' }}</div>
+        <div class="text-sm font-sans font-medium truncate" :class="{'text-muted': r.sender_class !== 'human'}"><span v-if="r.sender_class === 'unknown'" class="text-yellow font-mono text-xs mr-1" title="unknown sender">?</span>{{ r.subject || '(no subject)' }}</div>
         <div class="text-xs text-muted truncate font-sans">{{ r.snippet }}</div>
         <div v-if="r.matched.length" class="mt-0.5 flex gap-1">
           <span v-for="m in r.matched" class="text-[10px] font-mono px-1 bg-surface" :class="m === 'fts' ? 'text-green' : 'text-accent'">{{ m }}</span>
         </div>
       </li>
-      <li v-if="!results.length && !loading" class="px-4 py-8 text-sm text-muted text-center">Keine Treffer</li>
+      <li v-if="!results.length && !loading" class="px-4 py-8 text-sm text-muted text-center">No results</li>
       <li ref="more" v-if="next" class="px-4 py-3 text-xs text-muted text-center font-mono">…</li>
     </ul>
 
     <article class="overflow-y-auto px-8 py-6" v-if="mail">
-      <h2 class="font-display font-semibold text-xl leading-snug border-l-2 border-accent pl-3">{{ mail.subject || '(kein Betreff)' }}</h2>
+      <h2 class="font-display font-semibold text-xl leading-snug border-l-2 border-accent pl-3">{{ mail.subject || '(no subject)' }}</h2>
       <dl class="mt-3 text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-muted">
-        <dt>Von</dt><dd class="text-ink">{{ mail.from_name }} <span class="font-mono text-xs">&lt;{{ mail.from_addr }}&gt;</span></dd>
-        <dt>An</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
-        <dt>Datum</dt><dd class="font-mono text-xs">{{ mail.date }}</dd>
-        <dt>Ordner</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }} · {{ {human: 'Kontakt', machine: 'automatisch', unknown: 'unbekannt'}[mail.sender_class] }}</dd>
-        <template v-if="mail.attachments.length"><dt>Anhänge</dt><dd class="text-xs flex flex-wrap gap-x-3">
+        <dt>From</dt><dd class="text-ink">{{ mail.from_name }} <span class="font-mono text-xs">&lt;{{ mail.from_addr }}&gt;</span></dd>
+        <dt>To</dt><dd class="font-mono text-xs break-all">{{ mail.to_addrs }}</dd>
+        <dt>Date</dt><dd class="font-mono text-xs">{{ mail.date }}</dd>
+        <dt>Folder</dt><dd class="text-xs">{{ mail.folder }} · {{ mail.direction }} · {{ {human: 'contact', machine: 'automated', unknown: 'unknown'}[mail.sender_class] }}</dd>
+        <template v-if="mail.attachments.length"><dt>Attachments</dt><dd class="text-xs flex flex-wrap gap-x-3">
           <a v-for="a in mail.attachments" :href="'/api/attachment?id=' + encodeURIComponent(mail.id) + '&name=' + encodeURIComponent(a)" target="_blank" class="text-accent hover:underline">📎 {{ a }}</a>
         </dd></template>
       </dl>
@@ -74,18 +74,18 @@
       </nav>
       <pre class="mt-6 whitespace-pre-wrap text-[14px] leading-relaxed">{{ mail.body_raw.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() }}</pre>
     </article>
-    <div v-else class="flex items-center justify-center text-muted text-sm">Wähle eine E-Mail</div>
+    <div v-else class="flex items-center justify-center text-muted text-sm">Select a mail</div>
   </main>
 <dialog ref="dlg" class="bg-surface text-ink border border-line p-6 w-[32rem] max-w-[90vw] backdrop:bg-black/60 m-auto">
-  <h2 class="font-display font-semibold text-lg border-l-2 border-accent pl-3">Bilder exportieren</h2>
-  <p class="mt-3 text-sm leading-relaxed">Speichert alle Bilder aus den E-Mails, die den aktuellen Filtern entsprechen, nach <span class="text-accent">exports/images/</span> neben dem Archiv. Der Suchbegriff zählt nicht, die Filter schon:</p>
+  <h2 class="font-display font-semibold text-lg border-l-2 border-accent pl-3">Export images</h2>
+  <p class="mt-3 text-sm leading-relaxed">Saves every image from the mails that match the current filters to <span class="text-accent">exports/images/</span> next to the archive. The search term is ignored, the filters apply:</p>
   <p class="mt-2 text-sm text-accent">{{ filterSummary }}</p>
-  <p class="mt-2 text-sm text-muted leading-relaxed">Bilder unter 50 KB (Logos, Signaturen) werden übersprungen, identische Bilder nur einmal gespeichert. Dateiname = Datum_Absender_Name, Dateidatum = Maildatum. Vorhandene Dateien werden überschrieben. Dauert je nach Menge einige Minuten.</p>
-  <p v-if="exported" class="mt-3 text-sm text-green">{{ exported.written }} Bilder aus {{ exported.mails_with }} von {{ exported.mails }} E-Mails geschrieben ({{ exported.small }} zu klein übersprungen) → {{ exported.out }}/</p>
+  <p class="mt-2 text-sm text-muted leading-relaxed">Images under 50 KB (logos, signatures) are skipped, identical images are saved once. File name = date_sender_name, file date = mail date. Existing files are overwritten. Takes a few minutes depending on the amount.</p>
+  <p v-if="exported" class="mt-3 text-sm text-green">{{ exported.written }} images written from {{ exported.mails_with }} of {{ exported.mails }} mails ({{ exported.small }} skipped as too small) → {{ exported.out }}/</p>
   <div class="mt-5 flex justify-end gap-3">
-    <button @click="$refs.dlg.close()" class="text-sm border border-line px-3 py-1.5 hover:border-accent">{{ exported ? 'Schließen' : 'Abbrechen' }}</button>
+    <button @click="$refs.dlg.close()" class="text-sm border border-line px-3 py-1.5 hover:border-accent">{{ exported ? 'Close' : 'Cancel' }}</button>
     <button @click="exportImages" :disabled="exporting" class="text-sm bg-accent text-bg px-3 py-1.5 hover:opacity-90 disabled:opacity-60">
-      <span v-if="exporting" class="inline-block animate-spin mr-1">◐</span>{{ exporting ? 'Exportiert …' : 'Jetzt exportieren' }}</button>
+      <span v-if="exporting" class="inline-block animate-spin mr-1">◐</span>{{ exporting ? 'Exporting …' : 'Export now' }}</button>
   </div>
 </dialog>
 </div>
@@ -96,8 +96,8 @@ createApp({
     return { q: u.get('q') || '', from: u.get('from') || '', since: u.get('since') || '', until: u.get('until') || '', human: u.get('human') === '1', attachments: u.get('attachments') === '1',
              results: [], next: null, sel: -1, mail: null, ms: 0, loading: false, timer: null, seq: 0, exporting: false, exported: null }; },
   computed: { active() { return this.q || this.from || this.since || this.until || this.human || this.attachments; },
-    filterSummary() { const f = []; if (this.from) f.push('von ' + this.from); if (this.since) f.push('ab ' + this.since); if (this.until) f.push('bis ' + this.until);
-      if (this.human) f.push('nur Menschen'); if (this.attachments) f.push('mit Anhang'); return f.length ? f.join(' · ') : 'keine Filter → das ganze Archiv'; } },
+    filterSummary() { const f = []; if (this.from) f.push('from ' + this.from); if (this.since) f.push('since ' + this.since); if (this.until) f.push('until ' + this.until);
+      if (this.human) f.push('people only'); if (this.attachments) f.push('with attachments'); return f.length ? f.join(' · ') : 'no filters → the whole archive'; } },
   mounted() {
     this.io = new IntersectionObserver(es => { if (es[0].isIntersecting) this.more(); });   // ponytail: native, no lib; plain list is fine to ~10k rows
     this.$watch('next', () => this.$nextTick(() => { this.io.disconnect(); if (this.$refs.more) this.io.observe(this.$refs.more); }));
