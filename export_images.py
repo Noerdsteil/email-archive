@@ -19,6 +19,7 @@ for r in recs:
         seen.add(h); found = True
         who = re.sub(r'[^a-z0-9]+', '-', (r['from'][0]['addr'] if r['from'] else 'unknown').split('@')[0].lower()).strip('-')
         name = re.sub(r'[^\w.\-]+', '_', part.get_filename() or f"inline.{part.get_content_subtype()}")
-        (out / f"{(r['date'] or 'undated')[:10]}_{who}_{h[:6]}_{name}"[:150]).write_bytes(data); n_written += 1
+        stem, ext = name.rsplit('.', 1) if '.' in name else (name, part.get_content_subtype())
+        (out / f"{(r['date'] or 'undated')[:10]}_{who}_{h[:6]}_{stem[:80]}.{ext}").write_bytes(data); n_written += 1
     n_mails_with += found
 print(f"{len(recs)} human mails scanned, {n_img} image parts, {n_small} below {min_bytes // 1024} KB, {n_written} unique images written from {n_mails_with} mails -> {out}/")
