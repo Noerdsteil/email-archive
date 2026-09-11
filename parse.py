@@ -140,7 +140,7 @@ def thread_ids(recs):
     for r in recs: r['thread_id'] = find(r['id'])
 
 
-def metrics(recs, bad, dupes, contacts=0):
+def metrics(recs, bad, dupes, contacts=0, read=None):
     n = len(recs); c = Counter()
     for r in recs:
         c['html'] += r['body_kind'] == 'html'; c['empty'] += not r['body']
@@ -156,12 +156,14 @@ def metrics(recs, bad, dupes, contacts=0):
     print(f"sender class: " + '  '.join(f"{k} {100 * v / max(n, 1):.0f}%" for k, v in sorted(cls.items())) + f"  |  contacts {contacts}")
     print(f"body words p50 {statistics.median(lens):.0f}  p95 {lens[int(0.95 * (len(lens) - 1))]}  max {lens[-1]}")
     print(f"threads {len(threads)}, singletons {sum(v == 1 for v in threads.values())}, largest {max(threads.values(), default=0)}")
-    print('folders:', dict(Counter(r['folder'] for r in recs)))
+    kept = Counter(r['folder'] for r in recs); read = read or kept
+    print('folders (kept/read):', '  '.join(f"{f} {kept[f]}/{read[f]}" for f in sorted(read)))   # kept 0 = every mail already in an earlier folder
 
 
 def main(root=BRONZE, out=SILVER):
-    recs, seen, bad, dupes = [], set(), 0, 0
+    recs, seen, bad, dupes, read = [], set(), 0, 0, Counter()
     for msg, folder, source in messages(root):
+        read[folder] += 1
         try: r = record(msg, folder, source)
         except Exception as e: bad += 1; print('skip:', e, file=sys.stderr); continue
         if r['id'] in seen: dupes += 1; continue
@@ -172,7 +174,7 @@ def main(root=BRONZE, out=SILVER):
     with out.open('w') as f:
         for r in recs: f.write(json.dumps(r, ensure_ascii=False) + '\n')
     (out.parent / 'contacts.json').write_text(json.dumps(dict(contacts.most_common()), ensure_ascii=False, indent=0))
-    metrics(recs, bad, dupes, len(contacts))
+    metrics(recs, bad, dupes, len(contacts), read)
     return recs
 
 
