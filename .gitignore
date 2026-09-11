@@ -8,3 +8,4 @@ __pycache__/
 gold.db
 email-archive-*.zip
 exports/
+.env

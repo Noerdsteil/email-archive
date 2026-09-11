@@ -10,5 +10,5 @@ services:
     # so "copy the folder" is the deployment. The image carries Python, dependencies and the embedding model.
     volumes: [".:/app"]
     environment:
-      OWN_ADDRESSES: "@example.com"   # your addresses or @domains, comma separated: decides sent vs. received
+      OWN_ADDRESSES: "${OWN_ADDRESSES:-@example.com}"   # set in .env (see .env.example): your addresses or @domains, comma separated; decides sent vs. received
     restart: unless-stopped
