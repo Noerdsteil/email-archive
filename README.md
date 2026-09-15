@@ -13,7 +13,11 @@ container. Nothing leaves it.
 Built in a day as a personal answer to a boring question: what happens to twenty years of mail when the provider,
 the client or the plan changes? The answer is a folder that any machine with Docker can bring back to life.
 
-<!-- screenshot: docs/screenshot.png (taken on the demo mailbox, `make demo`) -->
+![Semantic search: a German query finds the English mail that means the same](docs/screenshots/Example-Vector-Search-German-English.png)
+
+| Filters and threads | Newsletter, classed as machine | Attachments, opened in place |
+|---|---|---|
+| ![Filters and threads](docs/screenshots/Example-Filter-Threads.png) | ![Newsletter](docs/screenshots/Example-Newsletter.png) | ![Attachments](docs/screenshots/Example-Clickable-Attachments.png) |
 
 ## What it does
 
