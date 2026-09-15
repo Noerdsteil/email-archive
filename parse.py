@@ -5,6 +5,7 @@ Env:    OWN_ADDRESSES="me@a.de,@mydomain.de"   decides direction (sent/received)
 """
 # ponytail: stdlib only. Lesson steps 0-5, 7, 8 in JonasWiki/EMAIL RAG Archive/Preprocessing.md
 import os, sys, json, mailbox, hashlib, re, statistics
+import settings
 from collections import Counter
 from email import policy
 from email.parser import BytesParser
@@ -12,8 +13,8 @@ from email.utils import parsedate_to_datetime, getaddresses
 from pathlib import Path
 from html.parser import HTMLParser
 
-BRONZE, SILVER = Path('bronze'), Path('silver/emails.jsonl')
-OWN = {a.strip().lower() for a in os.environ.get('OWN_ADDRESSES', '').split(',') if a.strip()}
+BRONZE, SILVER = Path(settings.BRONZE), Path(settings.SILVER)
+OWN = settings.OWN_ADDRESSES
 def is_own(addr):          # entries starting with '@' match a whole domain: "@example.com"
     return addr in OWN or any(addr.endswith(o) for o in OWN if o.startswith('@'))
 

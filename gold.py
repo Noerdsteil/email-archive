@@ -5,18 +5,18 @@
 """
 # ponytail: one file, one DB. Search API and MCP call search() from here.
 import sys, json, sqlite3, argparse, time, os
+import settings
 import sqlite_vec
 from fastembed import TextEmbedding
 
-DB, SILVER, MODEL, DIM = 'gold.db', 'silver/emails.jsonl', 'jinaai/jina-embeddings-v2-base-de', 768
-MODEL_DIR = os.environ.get('MODEL_DIR', 'models')     # Docker: /models baked into the image; local .venv: ./models
+DB, SILVER, MODEL, DIM, MODEL_DIR = settings.DB, settings.SILVER, settings.EMBED_MODEL, settings.EMBED_DIM, settings.MODEL_DIR
 _model = None
 
 
 def model():
     global _model
     if _model is None:
-        os.environ.setdefault('HF_HUB_OFFLINE', '1')          # models/ is the only source after first download
+        if os.path.isdir(MODEL_DIR) and os.listdir(MODEL_DIR): os.environ.setdefault('HF_HUB_OFFLINE', '1')   # once downloaded, models/ is the only source
         _model = TextEmbedding(MODEL, cache_dir=MODEL_DIR)
     return _model
 
@@ -44,7 +44,7 @@ def connect():
 
 def embed_text(r):
     f = r['from'][0] if r['from'] else {'name': '', 'addr': ''}
-    return f"From: {f['name']} <{f['addr']}> | Date: {(r['date'] or '')[:10]} | Subject: {r['subject']}\n{r['body'][:20000]}"   # ~8k tokens; tokenizer would truncate anyway
+    return f"From: {f['name']} <{f['addr']}> | Date: {(r['date'] or '')[:10]} | Subject: {r['subject']}\n{r['body'][:settings.EMBED_CHARS]}"   # ~8k tokens; tokenizer would truncate anyway
 
 
 def build(limit=None, rebuild=False):
@@ -98,7 +98,7 @@ def filters(from_=None, since=None, until=None, human=False, attachments=False):
     return where, args
 
 
-def search(q, n=10, from_=None, since=None, until=None, human=False, attachments=False, k=60):
+def search(q, n=10, from_=None, since=None, until=None, human=False, attachments=False, k=settings.FUSION_K):
     c = connect()
     where, args = filters(from_, since, until, human, attachments)
     filt = (' and ' + ' and '.join(where)) if where else ''

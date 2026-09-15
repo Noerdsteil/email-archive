@@ -4,9 +4,9 @@
 # ponytail: reads bronze by byte range (same path as the attachment endpoint). No DB writes, no state; reruns overwrite.
 import sys, os, json, re, hashlib, pathlib
 from datetime import datetime
-import parse
+import parse, settings
 
-OUT, MIN_KB = 'exports/images', 50           # below 50 KB it is a logo, a signature or a tracking pixel
+OUT, MIN_KB = settings.IMAGE_DIR, settings.IMAGE_MIN_KB   # below 50 KB it is a logo, a signature or a tracking pixel
 
 
 def run(mails, out=OUT, min_kb=MIN_KB):
@@ -33,6 +33,6 @@ def run(mails, out=OUT, min_kb=MIN_KB):
 
 if __name__ == '__main__':
     recs = ({'date': r['date'], 'from_addr': r['from'][0]['addr'] if r['from'] else '', 'source': r['source']}
-            for r in map(json.loads, open('silver/emails.jsonl')) if r.get('sender_class') == 'human' and r.get('source'))
+            for r in map(json.loads, open(settings.SILVER)) if r.get('sender_class') == 'human' and r.get('source'))
     st = run(recs, sys.argv[1] if len(sys.argv) > 1 else OUT, int(sys.argv[2]) if len(sys.argv) > 2 else MIN_KB)
     print(f"{st['mails']} mails scanned, {st['images']} image parts, {st['small']} small, {st['written']} unique images from {st['mails_with']} mails -> {st['out']}/")

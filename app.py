@@ -8,7 +8,7 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from mcp.server.mcpserver import MCPServer
-import gold, parse, export_images
+import gold, parse, export_images, settings
 
 mcp = MCPServer('email-archive', instructions=(
     'Private personal email archive, German and English. Call search_emails first (short results), then get_email for the '
@@ -29,7 +29,7 @@ def index(): return FileResponse('static/index.html')
 
 
 @app.get('/api/search')
-def search(q: str = '', n: int = 30, from_: str | None = Query(None, alias='from'),
+def search(q: str = '', n: int = settings.PAGE_SIZE, from_: str | None = Query(None, alias='from'),
            since: str | None = None, until: str | None = None, human: bool = False, attachments: bool = False,
            before: str | None = None):
     if q.strip():

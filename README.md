@@ -2,6 +2,9 @@
 
 **Your mail, searchable forever, in one folder.**
 
+[![ci](https://github.com/<you>/email-archive/actions/workflows/ci.yml/badge.svg)](https://github.com/<you>/email-archive/actions)
+![python](https://img.shields.io/badge/python-3.13-blue) ![license](https://img.shields.io/badge/license-MIT-green)
+
 Export your mailboxes once, drop them in a folder, run `docker compose up`. You get instant keyword + semantic
 search over every mail you ever sent or received, a reading pane with threads and attachments, an image export,
 and an MCP endpoint so an AI assistant can search the archive too. Everything runs on your machine in one
@@ -10,12 +13,12 @@ container. Nothing leaves it.
 Built in a day as a personal answer to a boring question: what happens to twenty years of mail when the provider,
 the client or the plan changes? The answer is a folder that any machine with Docker can bring back to life.
 
-<!-- screenshot: docs/screenshot.png -->
+<!-- screenshot: docs/screenshot.png (taken on the demo mailbox, `make demo`) -->
 
 ## What it does
 
-- **Hybrid search** — full-text (SQLite FTS5) and semantic (embeddings via sqlite-vec) fused by reciprocal rank
-  fusion. "Backup fehlgeschlagen" finds the mail that says "Sicherung nicht erfolgreich". ~10 ms per query.
+- **Hybrid search** — full-text (SQLite FTS5) and semantic (embeddings in sqlite-vec) fused by reciprocal rank
+  fusion. "Backup fehlgeschlagen" finds the mail that says "die Sicherung ist nicht durchgelaufen".
 - **Instant** — results update 120 ms after the last keystroke, ↑↓ moves the selection, Esc resets.
 - **Browse** — empty query shows the whole archive newest first with infinite scroll.
 - **Filters** — sender, date range, people only (no newsletters, no robots), with attachments. All mirrored in the URL,
@@ -41,26 +44,38 @@ Open <http://localhost:8000>. The archive is empty until you import mail:
 
 1. **Export mailboxes as mbox** into `bronze/`. Apple Mail: select a mailbox, *Mailbox → Export Mailbox…*.
    Any `*.mbox` folder or file and any `*.eml` files under `bronze/` are picked up, folder by folder.
-2. **Parse and index**
+2. **Import**
    ```sh
-   docker compose run --rm app python parse.py          # bronze -> silver/emails.jsonl, prints metrics
-   docker compose run --rm app python gold.py build     # silver -> gold.db, ~4 mails/s on a laptop CPU, Ctrl+C safe
-   docker compose restart
+   ./import.sh                  # parse -> index -> restart, prints the metrics. ~4 mails/s on a laptop CPU, Ctrl+C safe
    ```
-3. **Add mail later**: drop more mbox files into `bronze/`, repeat step 2. Both commands only add what is new;
+3. **Add mail later**: drop more mbox files into `bronze/`, run `./import.sh` again. Only new mail is embedded;
    duplicates across folders are dropped by Message-ID.
 
-Changed a `.py` file? `docker compose restart`. HTML/JS in `static/` reloads live.
+`make` lists the everyday commands (`up`, `import`, `demo`, `test`, `export`, `logs`, `down`).
+
+### Try it without your mail
+
+```sh
+make demo                       # synthetic mailbox of 20 invented mails under demo/, served on http://localhost:8001
+```
+
+Threads, a newsletter, an invoice, a shop conversation, a photo attachment. Nothing in `demo/` touches your archive.
+This is also what the tests and the screenshots use.
 
 ## How it works
 
 Three layers, each rebuildable from the one below. Nothing is ever the only copy.
 
-| Layer | What | Where |
-|---|---|---|
-| bronze | raw mbox exports, never modified | `bronze/` |
-| silver | one cleaned JSON record per mail | `silver/emails.jsonl` |
-| gold | search index: metadata columns + FTS5 + vectors | `gold.db` (one SQLite file) |
+```mermaid
+flowchart LR
+    M[Mail client<br/>mbox export] -->|copy| B[bronze/<br/>raw mbox, never modified]
+    B -->|parse.py<br/>stdlib only| S[silver/emails.jsonl<br/>one clean record per mail]
+    S -->|gold.py build<br/>embed once| G[(gold.db<br/>columns + FTS5 + vectors)]
+    G --> A[app.py<br/>FastAPI]
+    A --> U[index.html<br/>Vue + Tailwind]
+    A --> P[/mcp<br/>AI clients/]
+    B -.->|attachments,<br/>by byte range| A
+```
 
 **`parse.py`** (standard library only) decodes MIME, prefers plain text over HTML, strips quoted replies and
 signatures, dedupes on Message-ID, threads via References, derives sent/received from your addresses, remembers
@@ -69,15 +84,46 @@ end so you can see what your archive looks like before you index it.
 
 **`gold.py`** embeds every mail with `jinaai/jina-embeddings-v2-base-de` (German + English, 8192 tokens, one
 vector per mail) through fastembed/ONNX on CPU, and stores columns, FTS5 and sqlite-vec in one file. The model is
-baked into the Docker image, so the index can never drift from the model that built it. `search()` fuses BM25 and
-vector ranks and applies filters as SQL.
+baked into the Docker image, so the index can never drift from the model that built it. Side tables `sources` and
+`classes` are refreshed on every build without re-embedding, so a classifier change costs seconds, not an hour.
 
 **`app.py`** is a small FastAPI service: `GET /api/search`, `GET /api/email`, `GET /api/attachment`,
-`POST /api/export-images`, and the MCP server at `/mcp`. **`static/index.html`** is a single file: Vue 3 and
-Tailwind 4 from vendored builds, no build step, Everforest colours.
+`POST /api/export-images`, and the MCP server at `/mcp`. **`static/index.html`** is one file: Vue 3 and Tailwind 4
+from vendored builds, no build step, Everforest colours.
 
-Side tables `sources` and `classes` are refreshed on every build without re-embedding, so a classifier change
-costs seconds, not an hour.
+### How a query travels
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant A as app.py
+    participant F as FTS5
+    participant V as sqlite-vec
+    U->>A: GET /api/search?q=…&since=…&human=1  (120 ms after the last keystroke)
+    A->>F: MATCH "word1" "word2"*  + filters as SQL → top 60 by BM25
+    A->>A: embed the query (~20 ms, same model as the index)
+    A->>V: nearest 240 → filters as SQL → top 60 by distance
+    A->>A: reciprocal rank fusion  score = Σ 1/(60+rank)
+    A-->>U: 30 hits with fts / vec badges, ~10 ms in SQLite
+```
+
+With an empty query the same endpoint pages through the archive newest first with a keyset cursor
+(`before=date|id`), so page 400 costs the same as page 1.
+
+### What a real archive looks like
+
+Parser metrics from the author's archive, 27k mails from four mbox exports spanning 2013 to 2024:
+
+| | |
+|---|---|
+| mails after dedupe | 27 730 (3 028 duplicates across folders dropped, 0 parse failures) |
+| sender class | human 26 % · machine 50 % · unknown 25 % (436 contacts learned from sent mail) |
+| html-only bodies | 25 % |
+| with attachments | 14 % |
+| body length | median 140 words, p95 1 071, longest 35 224 |
+| threads | 24 613, largest 29 mails |
+| index build | ~4 mails/s on an M-series laptop, resumable |
+| query | ~10 ms in SQLite plus embedding the query |
 
 ## Use it from an AI client
 
@@ -99,6 +145,21 @@ The **Images** button runs `POST /api/export-images` with the current filters an
 to `exports/images/`, named `date_sender_hash_name`, file date set to the mail date, duplicates saved once.
 `python export_images.py` does the same for all mail from people, without the UI.
 
+## Configuration
+
+Everything tunable sits in `settings.py`, each value overridable by an environment variable
+(set them in `compose.yaml` or `.env`):
+
+| Variable | Default | What |
+|---|---|---|
+| `OWN_ADDRESSES` | | your addresses or `@domains`, comma separated; decides sent vs. received |
+| `DATA_DIR` | `.` | where `bronze/`, `silver/`, `gold.db` live (`demo` for the trial archive) |
+| `EMBED_MODEL` / `EMBED_DIM` | jina-v2-base-de / 768 | any fastembed model; rebuild the image and `gold.py build --rebuild` |
+| `EMBED_CHARS` | 20000 | body characters fed to the model |
+| `PAGE_SIZE` | 30 | rows per browse page and default hit count |
+| `FUSION_K` | 60 | candidates per retriever before rank fusion |
+| `IMAGE_MIN_KB` | 50 | image export: smaller files are logos and pixels |
+
 ## Move it to another machine
 
 ```sh
@@ -117,11 +178,12 @@ python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
 OWN_ADDRESSES="@example.com" .venv/bin/python parse.py
 .venv/bin/python gold.py build                       # downloads the model into ./models on first run
 .venv/bin/uvicorn app:app --reload --port 8000
-.venv/bin/python test_parse.py                       # parser self-check on a synthetic mailbox
+make test                                            # test_parse.py (parser) + test_search.py (demo mailbox end to end)
 .venv/bin/python test_mcp.py                         # MCP self-check against a running server
 ```
 
 `onnxruntime` is pinned to 1.22.1: 1.29 returns NaN and 1.23+ fails to load this model on arm64.
+CI runs both tests on every push, with the model cached between runs.
 
 ## Design notes
 
@@ -131,11 +193,24 @@ OWN_ADDRESSES="@example.com" .venv/bin/python parse.py
 - **SQLite over Postgres.** One file, no volume, smaller image. FTS5 and sqlite-vec cover everything a personal archive needs.
 - **Standard library first.** The parser has no dependencies. The UI has no build step.
 
+## Limitations
+
+- **Tested with Apple Mail exports on macOS.** Any mbox should work (Thunderbird, Gmail Takeout after unzipping),
+  but folder naming (`Name.mbox/mbox`, `_Sent` suffix as fallback) follows Apple Mail and nothing else has been tried.
+- **German and English.** The embedding model is bilingual; other languages fall back to keyword search quality.
+- **One user, no login.** The server binds to localhost and trusts whoever reaches it. Do not expose the port.
+- **CPU embedding is slow once.** About four mails per second; a 30k archive takes a couple of hours, resumable.
+- **Long mails are truncated** at roughly 8k tokens for the vector; the full text is still searchable by keyword.
+- **Mails render as text.** HTML is flattened, inline images are not shown, attachments are not indexed.
+- **Bronze must stay.** Attachments are read from the original mbox; move it and the links break until the next import.
+- **The list is a plain DOM list.** Comfortable to about 10k rows on screen; scroll further and it gets heavy.
+- **Sender classes are heuristics.** A quarter of senders end up unknown. Good enough for a filter, not for a rule.
+
 ## Not built yet
 
-Chat against a local LLM through the MCP tools, an LLM pass to classify the 25 % of senders the rules leave unknown,
-attachment text extraction, a Gmail/Thunderbird export guide.
+Chat against a local LLM through the MCP tools, an LLM pass over the unknown senders, attachment text
+extraction, virtual scrolling, export guides for other mail clients. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT
+MIT. Made by [Jonas Schweizer](https://www.schweizer-jonas.de).

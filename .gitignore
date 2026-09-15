@@ -9,3 +9,5 @@ gold.db
 email-archive-*.zip
 exports/
 .env
+demo/*
+!demo/make_demo.py

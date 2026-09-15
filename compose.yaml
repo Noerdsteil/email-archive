@@ -11,4 +11,10 @@ services:
     volumes: [".:/app"]
     environment:
       OWN_ADDRESSES: "${OWN_ADDRESSES:-@example.com}"   # set in .env (see .env.example): your addresses or @domains, comma separated; decides sent vs. received
+      # Optional knobs, all documented in settings.py. Uncomment to change:
+      # EMBED_MODEL: jinaai/jina-embeddings-v2-base-de   # any fastembed model; rebuild the image and gold.db --rebuild
+      # EMBED_DIM: 768
+      # PAGE_SIZE: 30                                    # rows per browse page
+      # FUSION_K: 60                                     # candidates per retriever before rank fusion
+      # IMAGE_MIN_KB: 50                                 # image export: smaller files are logos and pixels
     restart: unless-stopped
