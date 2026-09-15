@@ -2,7 +2,7 @@
 
 **Your mail, searchable forever, in one folder.**
 
-[![ci](https://github.com/<you>/email-archive/actions/workflows/ci.yml/badge.svg)](https://github.com/<you>/email-archive/actions)
+[![ci](https://github.com/Noerdsteil/email-archive/actions/workflows/ci.yml/badge.svg)](https://github.com/Noerdsteil/email-archive/actions)
 ![python](https://img.shields.io/badge/python-3.13-blue) ![license](https://img.shields.io/badge/license-MIT-green)
 
 Export your mailboxes once, drop them in a folder, run `docker compose up`. You get instant keyword + semantic
@@ -35,7 +35,7 @@ the client or the plan changes? The answer is a folder that any machine with Doc
 You need Docker (Docker Desktop, OrbStack or Docker Engine). Nothing else.
 
 ```sh
-git clone https://github.com/<you>/email-archive && cd email-archive
+git clone https://github.com/Noerdsteil/email-archive && cd email-archive
 cp .env.example .env            # put your own addresses or @domains in here
 docker compose up -d            # first run builds the image and downloads the embedding model (~310 MB)
 ```
@@ -203,6 +203,8 @@ CI runs both tests on every push, with the model cached between runs.
 - **Long mails are truncated** at roughly 8k tokens for the vector; the full text is still searchable by keyword.
 - **Mails render as text.** HTML is flattened, inline images are not shown, attachments are not indexed.
 - **Bronze must stay.** Attachments are read from the original mbox; move it and the links break until the next import.
+- **Not from `~/Downloads` on macOS.** Docker cannot read that folder unless you grant it access; the page then fails with
+  `Operation not permitted`. Unzip the export somewhere else, `~/Documents` works.
 - **The list is a plain DOM list.** Comfortable to about 10k rows on screen; scroll further and it gets heavy.
 - **Sender classes are heuristics.** A quarter of senders end up unknown. Good enough for a filter, not for a rule.
 
