@@ -1,4 +1,4 @@
-# email-archive
+# Local AI Email Archive
 
 **Your mail, searchable forever, in one folder.**
 

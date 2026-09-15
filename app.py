@@ -20,7 +20,7 @@ async def lifespan(app):
     gold.model()                                   # load the embedding model once, not on first query
     async with mcp.session_manager.run(): yield    # mounted apps do not get their own lifespan run
 
-app = FastAPI(title='email-archive', lifespan=lifespan)
+app = FastAPI(title='Local AI Email Archive', lifespan=lifespan)
 app.mount('/static', StaticFiles(directory='static'), name='static')
 
 
